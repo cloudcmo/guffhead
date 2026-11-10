@@ -123,16 +123,16 @@ details { margin: 12px 0; }
 }
 .card.red { color: var(--red); }
 .card.lg { --w: 74px; } .card.md { --w: 54px; } .card.sm { --w: 40px; } .card.xs { --w: 24px; }
-.card b { position: absolute; top: 3%; left: 7%; font: 800 calc(var(--w) * .28) / .95 var(--display); display: flex; flex-direction: column; align-items: center; }
-.card b i { font-style: normal; font-size: .8em; }
-.card em { font-style: normal; font-size: calc(var(--w) * .5); line-height: 1; margin-top: 12%; }
-.card em.face { font: 900 italic calc(var(--w) * .6) var(--display); margin-top: 18%; text-shadow: 2px 2px 0 rgba(216, 178, 90, .55); }
-.card em.ace { font-size: calc(var(--w) * .72); }
+.card b { position: absolute; top: 2%; left: 6%; font: 900 calc(var(--w) * .4) / .9 var(--body); letter-spacing: -.04em; display: flex; flex-direction: column; align-items: center; }
+.card b i { font-style: normal; font-size: .62em; margin-top: 1px; }
+.card em { font-style: normal; font-size: calc(var(--w) * .46); line-height: 1; margin: 34% 0 0 18%; }
+.card em.face { font: 900 italic calc(var(--w) * .52) var(--display); margin: 36% 0 0 22%; text-shadow: 2px 2px 0 rgba(216, 178, 90, .55); }
+.card em.ace { font-size: calc(var(--w) * .6); }
 .card .mark { position: absolute; right: 4%; bottom: 3%; font-size: calc(var(--w) * .26); text-decoration: none; line-height: 1; color: var(--gold-lo); }
-.card.xs b { font-size: 9px; top: 1px; left: 2px; }
+.card.xs b { font-size: 11px; top: 1px; left: 2px; }
 .card.xs em, .card.xs .mark { display: none; }
 .card.xs b i { font-size: 8px; }
-.card.sm em { margin-top: 18%; }
+.card.sm em { margin: 40% 0 0 22%; }
 .card[role="button"] { cursor: pointer; }
 .card.sel { transform: translateY(-14px); box-shadow: 0 0 0 3px var(--gold), 0 10px 18px rgba(0, 0, 0, .45); }
 .card.dim { filter: brightness(.62) saturate(.5); }
@@ -407,7 +407,7 @@ body.tabs .app { padding-bottom: 90px; }
 .podstatus.next { color: var(--gold-hi); }
 .podstatus.next::before { content: "▸ "; }
 .card.op { --w: 32px; }
-.card.op b { font-size: 12px; top: 2px; left: 3px; }
+.card.op b { font-size: 16px; top: 2px; left: 3px; }
 .card.op em, .card.op .mark { display: none; }
 .slot.op { width: 32px; height: 46px; }
 .dir.flipped { animation: spin .9s ease-out 1, pulse 1.2s ease-out 1; }
