@@ -1,0 +1,37 @@
+name = "guffhead"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+routes = [
+  { pattern = "guffhead.carlosfandango.net", custom_domain = true },
+]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true   # every request through src/index.js, so pages and scripts get no-cache
+
+# Logins and faces are shared with Words and Guff and CountGuff, so this is the wwg database. Guffhead's own
+# tables are prefixed gh_ (schema.sql); it only reads players, memberships, cg_players, cg_links and cg_avatars.
+[[d1_databases]]
+binding = "DB"
+database_name = "wwg"
+database_id = "031a51fb-27d9-4835-9d3c-ec49d9840fca"
+
+# The idle timer: every 15 minutes, GuffBot plays the go of anyone who's left it longer than their table allows.
+# Cron triggers are free on Workers.
+[triggers]
+crons = ["*/15 * * * *"]
+
+# Notifications. The public key is written here by `node tools/vapid.mjs`; the private key is a secret:
+#   npx wrangler secret put VAPID_PRIVATE_KEY < .vapid-private && rm .vapid-private
+[vars]
+VAPID_PUBLIC_KEY = ""
+VAPID_SUBJECT = "mailto:carl@mesnerlyons.com"
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[limits]
+cpu_ms = 5000

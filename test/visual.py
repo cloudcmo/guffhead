@@ -1,0 +1,35 @@
+# Guffhead in a phone-sized browser: log in, deal against the house, swap, play a few goes, and screenshot each
+# step to test/shots/. Run under `npx wrangler dev --port 8799`.  python3 test/visual.py
+import os, sys
+from playwright.sync_api import sync_playwright
+BASE = os.environ.get("BASE", "http://127.0.0.1:8799")
+OUT = os.path.join(os.path.dirname(__file__), "shots")
+os.makedirs(OUT, exist_ok=True)
+errors = []
+with sync_playwright() as p:
+    b = p.chromium.launch()
+    pg = b.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=2)
+    pg.on("console", lambda m: errors.append(m.text) if m.type == "error" and "fonts.g" not in m.text else None)
+    pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg.goto(BASE + "/")
+    pg.wait_for_selector("#loginForm")
+    pg.screenshot(path=f"{OUT}/1-door.png")
+    pg.fill("#name", sys.argv[1] if len(sys.argv) > 1 else "carl"); pg.fill("#pin", sys.argv[2] if len(sys.argv) > 2 else "1234")
+    pg.click("button[type=submit]")
+    pg.wait_for_selector(".lobby")
+    pg.wait_for_timeout(600)
+    pg.screenshot(path=f"{OUT}/2-lobby.png", full_page=True)
+    pg.click("[data-crew=guffbot]"); pg.wait_for_timeout(200)
+    pg.click("[data-crew=msguffbot]"); pg.wait_for_timeout(200)
+    pg.click("[data-crew=nick]"); pg.wait_for_timeout(200)
+    pg.click("details.rules summary"); pg.wait_for_timeout(200)
+    pg.screenshot(path=f"{OUT}/3-deal.png", full_page=True)
+    pg.click("#deal")
+    pg.wait_for_selector(".sixcards")
+    pg.wait_for_timeout(500)
+    pg.screenshot(path=f"{OUT}/4-swap.png", full_page=True)
+    pg.click("#readyBtn")
+    pg.wait_for_timeout(1200)
+    pg.screenshot(path=f"{OUT}/5-waiting.png", full_page=True)
+    print("errors:", errors)
+    b.close()

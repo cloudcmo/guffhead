@@ -1,0 +1,15 @@
+{
+  "name": "guffhead",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:remote": "wrangler d1 execute wwg --remote --file=schema.sql",
+    "db:local": "wrangler d1 execute wwg --local --file=test/local-players.sql && wrangler d1 execute wwg --local --file=schema.sql",
+    "test": "node test/rules.test.mjs && node test/bot.test.mjs 600 && node test/game.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.42.0"
+  }
+}
