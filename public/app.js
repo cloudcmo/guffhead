@@ -129,7 +129,7 @@ function noise(len, freq, q, gain, when = 0) {
     src.connect(f); f.connect(g); g.connect(actx.destination); src.start(t);
   } catch {}
 }
-const sound = { on: store.get("gh:sound") !== false };
+const sound = { on: store.get("gh:sound") === true };   // off unless switched on (Carl, 10 Nov 2026)
 const snap = (n = 1) => { if (sound.on) for (let i = 0; i < n; i++) noise(0.05, 2600 + Math.random() * 800, 1.2, 0.5, i * 0.07); };
 const whoosh = () => { if (sound.on) { noise(0.6, 500, 0.6, 0.9); noise(0.4, 1400, 0.8, 0.4, 0.1); } };
 const shuffleSound = () => { if (sound.on) for (let i = 0; i < 10; i++) noise(0.03, 3000, 1, 0.3, i * 0.035); };
