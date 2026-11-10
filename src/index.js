@@ -28,8 +28,7 @@ import { DEFAULTS } from "../public/rules.js";
 import { sha256, randomToken, findPlayer, opponentsOf, looksFor } from "./people.js";
 import { pushConfigured, sendPush } from "./push.js";
 
-const BUILD = "2026-11-10.1";
-const BUILD_NOTE = "Opening night at The Guff's Head.";
+import { BUILD, NOTE as BUILD_NOTE } from "../public/build.js";
 
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
 const err = (message, status = 400) => json({ error: message }, status);
@@ -112,7 +111,7 @@ async function api(request, env, ctx, path, url) {
     const lg = await league(env, who, opponents);
     return json({ league: lg, me: { id: who.id, name: who.name, isAdmin: who.isAdmin }, opponents, house: HOUSE, games, looks: await looksFor(env, ids), defaults: DEFAULTS, push: pushConfigured(env), build: BUILD, note: BUILD_NOTE });
   }
-  if (path === "/api/games" && m === "GET") return json({ games: await listGames(env, who) });
+  if (path === "/api/games" && m === "GET") return json({ build: BUILD, games: await listGames(env, who) });
   if (path === "/api/games" && m === "POST") {
     const st = await createGame(env, who, await body(request), opponentsOf);
     later(ctx, notify(env, st, { status: "playing", required: [who.id] }));
@@ -140,7 +139,7 @@ async function api(request, env, ctx, path, url) {
       presence(env, st.id),
       env.DB.prepare(`SELECT id, player_id, text, created_at FROM gh_chat WHERE game_id = ? AND id > ? ORDER BY id DESC LIMIT 60`).bind(st.id, chatSince).all(),
     ]);
-    return json({ game: viewFor(st, who.id, since), here: hereNow(pres).filter((p) => p !== who.id), chat: chat.results.reverse(), looks: since ? undefined : await looksFor(env, st.players) });
+    return json({ build: BUILD, note: BUILD_NOTE, game: viewFor(st, who.id, since), here: hereNow(pres).filter((p) => p !== who.id), chat: chat.results.reverse(), looks: since ? undefined : await looksFor(env, st.players) });
   }
   mm = path.match(/^\/api\/games\/([a-z0-9]{6})\/act$/);
   if (mm && m === "POST") {

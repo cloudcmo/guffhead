@@ -40,6 +40,7 @@ Logins are Words and Guff's: Carl, Nick, Steve and Kate use the names and PINs t
 as opponents. Private-league players log in with their league code.
 
 ## Code
+- `public/build.js` the version (bump on every deploy): a phone on an older page gets a "tap to update" bar.
 - `public/rules.js` the rules (shared by page and Worker): deal, the swap, plays, burns, the house rules, forced moves,
   what each player may see.
 - `public/bot.js` GuffBot (lowest card first, with lapses) and Ms GuffBot (four-of-a-kind burns, saves her 10s for

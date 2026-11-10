@@ -3,7 +3,8 @@ import { needWords, rankOf, isMagic, describeRules, DEFAULTS, IDLE_CHOICES, MAX_
 import { comment, describe, weight, room, say, cardName, pluralOf } from "./lines.js";
 import { pick as pickPaper } from "./wallpaper.js";
 
-export const BUILD = "2026-11-10.1";
+import { BUILD } from "./build.js";
+export { BUILD };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const store = {
@@ -45,7 +46,19 @@ async function api(path, opts = {}) {
   if (r.status === 401 && S.token) { logout(); throw new Error("Please log in again"); }
   if (!r.ok) { const e = new Error(b.error || `Error ${r.status}`); e.status = r.status; throw e; }
   if (b.looks) Object.assign(S.looks, b.looks);
+  if (b.build && b.build !== BUILD) offerUpdate(b.build, b.note);
   return b;
+}
+
+/** The server is on a newer version than this page: a bar to tap, never a forced reload mid-go. */
+function offerUpdate(build, note) {
+  if ($("update")) return;
+  const bar = document.createElement("button");
+  bar.id = "update";
+  bar.className = "update";
+  bar.innerHTML = `<span class="pint">🍺</span><span><b>Fresh round poured</b><small>${esc(note || "A new version of Guffhead is ready.")} Tap to update.</small></span>`;
+  bar.onclick = () => { bar.classList.add("going"); location.reload(); };
+  document.body.appendChild(bar);
 }
 function toast(msg, ms = 2800) {
   const t = $("toast");
@@ -238,7 +251,7 @@ async function renderLobby() {
 
       ${notifyCard()}
       <details class="howto"><summary>How to play</summary>${howTo(R)}</details>
-      <p class="foot"><a href="#/league">The 💩 league</a> · <a href="#/record">Your record</a> · <a href="https://hub.carlosfandango.net/">All the Guff games</a> · <button class="linkish" id="logout">Go home</button></p>
+      <p class="foot"><a href="#/league">The 💩 league</a> · <a href="#/record">Your record</a> · <a href="https://hub.carlosfandango.net/">All the Guff games</a> · <button class="linkish" id="logout">Go home</button><br><small class="soft">Version ${esc(BUILD)}</small></p>
     </section>`;
   const app = $("app");
   app.querySelectorAll("[data-crew]").forEach((b) => (b.onclick = () => { const id = b.dataset.crew; NEW.crew = NEW.crew.includes(id) ? NEW.crew.filter((x) => x !== id) : [...NEW.crew, id]; renderLobby(); }));
