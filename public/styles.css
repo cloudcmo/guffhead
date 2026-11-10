@@ -575,3 +575,17 @@ body.tabs .nexttoast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 .game .opps { margin-top: 2px; }
 .hand.two { flex-wrap: wrap; row-gap: 8px; padding-left: calc(-1 * var(--ov, 0px)); }
 .hand.two > .card { margin-left: var(--ov, 6px); }
+
+/* the wardrobe (10 Nov 2026): what you're wearing down the pub */
+.wardrobe { display: flex; gap: 12px; align-items: center; }
+.wardrobe .tryon { flex: 0 0 auto; }
+.wardrobe .tryon svg { display: block; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .45)); }
+.wardrobe .wardtext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.wardrobe .wardtext > p { margin: 0; }
+.chips.dress { display: flex; flex-direction: column; gap: 6px; }
+.chips.dress .chip { border-radius: 14px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; line-height: 1.2; }
+.chips.dress .chip small { font-weight: 600; opacity: .85; }
+.wardrobe #tryOn { align-self: flex-start; }
+.figure.pub { overflow: visible; }
+.clobber { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; font-weight: 600; }
+.clobber li { background: rgba(0, 0, 0, .25); border-radius: 10px; padding: 8px 10px; }

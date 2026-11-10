@@ -117,8 +117,23 @@ function figureOf(seedKey, pid, size = 130, poo = false, drop = false) {
   const f = bareFigure(seedKey, pid, size);
   return poo ? `<span class="hw fig" style="--s:${size}px">${f}<i class="pooh${drop ? " drop" : ""}">💩</i></span>` : f;
 }
+/* Down the pub (Carl, 10 Nov 2026): wide collars, paisley, kipper ties, diamond jumpers and car coats with a pint;
+   maxi dresses, jumpsuits and go-go boots with a cocktail and an umbrella. pubwear.js draws them; the outfit is
+   seeded by the game, so it's the same on every phone and different next game. */
+const HEADBOX = "translate(56 -6) translate(64 112) scale(1.12) translate(-64 -112)";
+const dressOf = (pid) => (pid === "guffbot" ? "lads" : pid === "msguffbot" ? "ladies" : (S.looks[pid] && S.looks[pid].dress) || "any");
+function skinOf(look) { const k = window.Avatar.PARTS.skin.find((x) => x.id === look.skin); return k ? k.hex : undefined; }
+function dressed(pid, seed, size, o = {}) {
+  if (!window.Pub) return null;
+  if (pid === "guffbot") return window.Pub.guffbot(seed, size, { hat: XMAS ? SANTA : CAP });
+  if (pid === "msguffbot") return window.Pub.ms(seed, size, { hat: (XMAS ? SANTA : HANKY) + FAG });
+  const look = lookOf(pid);
+  return window.Pub.wear(seed, size, window.Avatar.head(look, { transform: HEADBOX, xmas: XMAS }), { pref: o.pref || dressOf(pid), skin: skinOf(look), label: nameOf(pid) });
+}
 function bareFigure(seedKey, pid, size) {
   const seed = seedOf(`${seedKey}:${pid}`);
+  const pub = dressed(pid, seed, size);
+  if (pub) return pub;
   if (pid === "guffbot" && window.Jumper) return window.Jumper.svg(seed, size);
   if (pid === "msguffbot" && window.Jumper && window.Jumper.ms) return window.Jumper.ms(seed, size);
   return window.Avatar.figure(lookOf(pid), seed, size, { label: nameOf(pid), xmas: XMAS });
@@ -229,7 +244,7 @@ function nav(h) {
 function renderLogin() {
   $("app").innerHTML = `
     <section class="door">
-      <div class="doorman">${window.Jumper ? window.Jumper.svg(seedOf(tonight()), 170) : headOf("guffbot", 120)}</div>
+      <div class="doorman">${dressed("guffbot", seedOf(tonight()), 170) || headOf("guffbot", 120)}</div>
       <p class="patter">"Evening. Card game's in the back room. Same name and PIN as Words and Guff."</p>
       <form id="loginForm" class="card-panel form" autocomplete="on">
         <label>Name <input id="name" name="username" autocomplete="username" autocapitalize="none" required></label>
@@ -311,6 +326,7 @@ async function renderLobby() {
         <button class="btn gold" id="invite">📨 Make an invite link</button>
         <div id="inviteOut"></div>
       </div>`}
+      ${wardrobeCard()}
       ${notifyCard()}
       <details class="howto"><summary>How to play</summary>${howTo(R)}</details>
       <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a> · <button class="linkish" id="logout">Go home</button><br><small class="soft">Version ${esc(BUILD)}</small></p>
@@ -328,6 +344,7 @@ async function renderLobby() {
   $("rulesReset").onclick = () => { NEW.rules = { ...DEFAULTS }; store.set("gh:rules", NEW.rules); renderLobby(); };
   $("deal").onclick = () => start({ players: NEW.crew, settings: NEW.rules });
   if ($("invite")) $("invite").onclick = () => makeInvite();
+  wireWardrobe();
   $("logout").onclick = async () => { try { await api("/logout", { method: "POST" }); } catch {} logout(); };
   app.querySelectorAll("[data-nudge]").forEach((b) => (b.onclick = async (e) => {
     e.preventDefault(); e.stopPropagation();
@@ -339,6 +356,40 @@ async function renderLobby() {
   maybeWelcome();
   clearInterval(S.poll);
   S.poll = setInterval(() => { if ((location.hash || "#/") === "#/" && !document.hidden && !document.activeElement.matches("select") && !$("welcome")) renderLobby(); }, 20000);
+}
+
+/* ---------- the wardrobe ---------- */
+const DRESS_CHOICES = [["lads", "👔 Lads' gear", "and a pint"], ["ladies", "👗 Ladies' gear", "and a cocktail"], ["any", "🎲 Surprise me", "either, every game"]];
+function wardrobeCard() {
+  return window.Pub ? `<h2>What you're wearing tonight</h2>${wardrobePanel()}` : "";
+}
+function wardrobePanel() {
+  const mine = dressOf(S.me.id);
+  const seed = seedOf(`${tonight()}:${S.me.id}:${S.tryOn || 0}`);
+  return `<div class="card-panel wardrobe">
+      <div class="tryon">${dressed(S.me.id, seed, 150)}</div>
+      <div class="wardtext">
+        <p class="small">${esc(window.Pub.caption("", seed, mine))}</p>
+        <div class="chips dress">${DRESS_CHOICES.map(([id, label, sub]) => `<button class="chip${mine === id ? " on" : ""}" data-dress="${id}">${label}<small>${sub}</small></button>`).join("")}</div>
+        <button class="linkish" id="tryOn">Try something else on</button>
+        <p class="small soft">A different outfit every game, from the wardrobe you pick.</p>
+      </div>
+    </div>`;
+}
+function wireWardrobe() {
+  const w = $("app").querySelector(".wardrobe");
+  if (!w) return;
+  const redraw = () => { const x = $("app").querySelector(".wardrobe"); if (x) { x.outerHTML = wardrobePanel(); wireWardrobe(); } };
+  w.querySelectorAll("[data-dress]").forEach((b) => (b.onclick = async () => {
+    const dress = b.dataset.dress;
+    if (dress === dressOf(S.me.id)) return;
+    try {
+      await api("/dress", { method: "POST", body: { dress } });
+      S.looks[S.me.id] = { ...(S.looks[S.me.id] || {}), dress };
+      S.tryOn = 0; buzz(10); redraw();
+    } catch (er) { toast(er.message); }
+  }));
+  $("tryOn").onclick = () => { S.tryOn = (S.tryOn || 0) + 1; redraw(); };
 }
 
 /** Always good news about you (Words and Guff's stat line): a different one each day, dismissible for the day. */
@@ -439,7 +490,7 @@ async function renderJoin(code) {
   else action = `<form id="joinForm" class="card-panel form"><label>What's your name? <input id="gname" maxlength="20" autocomplete="given-name" autocapitalize="words" required placeholder="First name"></label><button class="btn gold" type="submit">Pull up a stool</button><p class="err" id="joinErr" hidden></p></form>`;
   $("app").innerHTML = `
     <section class="door join">
-      <div class="doorman">${window.Jumper ? window.Jumper.svg(seedOf(code), 150) : headOf("guffbot", 110)}</div>
+      <div class="doorman">${dressed("guffbot", seedOf(code), 150) || headOf("guffbot", 110)}</div>
       <p class="patter"><b>${esc(inv.hostName)}</b> has saved you a seat in the back room for a hand of Guffhead${others.length ? `, with ${esc(others.join(" and "))}` : ""}.</p>
       ${action}
       <details class="howto"><summary>How to play</summary>
@@ -770,13 +821,18 @@ function renderGame(staging = false) {
   fitHand();
   if (!staging) { bringMyGoIntoView(G); startIdle(G); }
 }
+/** Who's wearing what tonight, in the pub's own words. */
+function clobber(G) {
+  if (!window.Pub) return "";
+  return `<ul class="clobber">${G.players.filter((p) => !isHouse(p)).map((p) => `<li>${esc(window.Pub.caption(p === S.me.id ? "" : nameOf(p), seedOf(`${G.id}:${p}`), dressOf(p)))}</li>`).join("")}</ul>`;
+}
 const tabBtn = (k, label) => `<button class="tabbtn${S.tab === k ? " on" : ""}" data-tab4="${k}" role="tab" aria-selected="${S.tab === k}">${label}</button>`;
 function tabPanel(G) {
   const s = G.settings;
   if (S.tab === "chat") return `<div id="chat" class="chat"></div>${quickEmojiRow()}<form id="chatForm" class="chatform"><input id="chatText" maxlength="280" placeholder="Say something to the table" autocomplete="off"><button class="btn small">Say</button></form>`;
   if (S.tab === "log") return logHtml(G);
   if (S.tab === "rules") return `<ul class="rulelist">${describeRules(s).map(([k, v]) => `<li><b>${esc(k)}</b> ${esc(v)}</li>`).join("")}<li><b>Idle timer</b> ${s.idleHours ? `GuffBot plays anyone's go after ${s.idleHours} hours.` : "Off: we wait."}</li></ul><details class="howto"><summary>How to play</summary>${howTo(s)}</details>`;
-  return `<div class="cast">${G.players.map((p) => `<figure class="${p === S.me.id ? "me" : ""}${p === G.loser ? " loser" : ""}">${figureOf(G.id, p, 110, wears(G, p), S.drop && wears(G, p))}<figcaption>${esc(you(p))}${wears(G, p) ? " 💩" : ""}</figcaption></figure>`).join("")}</div>
+  return `<div class="cast">${G.players.map((p) => `<figure class="${p === S.me.id ? "me" : ""}${p === G.loser ? " loser" : ""}">${figureOf(G.id, p, 110, wears(G, p), S.drop && wears(G, p))}<figcaption>${esc(you(p))}${wears(G, p) ? " 💩" : ""}</figcaption></figure>`).join("")}</div>${clobber(G)}
     ${G.status === "playing" && G.players.includes(S.me.id) ? `<button class="btn ghost" id="resign">Leave the table (you'll be the Guffhead)</button>` : ""}`;
 }
 /** Who plays after seat i, in the direction of play, skipping anyone who's out. */

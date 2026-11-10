@@ -18,6 +18,7 @@
  *   GET  /api/league               the Guffhead league: 💩 counts (only losing scores)
  *   GET  /api/logbook              finished games between people in my circle
  *   POST /api/games/:id/nudge      a tap on the shoulder for whoever's keeping us waiting (after 2 hours)
+ *   POST /api/dress                { dress: lads | ladies | any }   what you wear down the pub
  *   GET  /api/push/key, POST /api/push/subscribe, /api/push/unsubscribe, /api/push/test
  *   POST /api/invites              { players: [bots], settings } -> { code, url }: a link anyone can use to play you
  *   GET  /api/invites/:code        (no login) who's asking, the house rules, open | used | expired
@@ -30,7 +31,7 @@
 import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, sweep, nudge, doing, doingAt, logbook, goodNews, makeInvite, inviteInfo, joinInvite, newGuest, Refusal } from "./game.js";
 import { BOTS } from "../public/bot.js";
 import { DEFAULTS } from "../public/rules.js";
-import { sha256, randomToken, findPlayer, opponentsOf, looksFor } from "./people.js";
+import { sha256, randomToken, findPlayer, opponentsOf, looksFor, setDress } from "./people.js";
 import { pushConfigured, sendPush } from "./push.js";
 
 import { BUILD, NOTE as BUILD_NOTE } from "../public/build.js";
@@ -145,6 +146,11 @@ async function api(request, env, ctx, path, url) {
     const st = await createGame(env, who, await body(request), opponentsOf);
     later(ctx, notify(env, st, { status: "playing", required: [who.id] }));
     return json({ game: viewFor(st, who.id) });
+  }
+  if (path === "/api/dress" && m === "POST") {
+    const b = (await body(request)) || {};
+    if (!(await setDress(env, who.id, b.dress))) return json({ error: "Lads, ladies or surprise me." }, 400);
+    return json({ ok: true, dress: b.dress });
   }
   if (path === "/api/record" && m === "GET") return json({ record: await record(env, who) });
   if (path === "/api/invites" && m === "POST") {

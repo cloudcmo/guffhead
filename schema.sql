@@ -99,3 +99,11 @@ CREATE TABLE IF NOT EXISTS gh_invites (
   used_by    TEXT,                     -- who joined
   game_id    TEXT
 );
+
+-- What each player wears down the pub (10 Nov 2026): lads (shirts, ties, jumpers, car coats, a pint),
+-- ladies (maxi dresses, jumpsuits, a cocktail with an umbrella) or any (a surprise every game)
+CREATE TABLE IF NOT EXISTS gh_prefs (
+  player_id  TEXT PRIMARY KEY,
+  dress      TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);

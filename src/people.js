@@ -86,5 +86,28 @@ export async function looksFor(env, ids) {
     const r = await env.DB.prepare(`SELECT player_id, look FROM cg_avatars WHERE player_id IN (${q})`).bind(...uniq).all();
     for (const p of r.results) { try { out[p.player_id] = JSON.parse(p.look); } catch {} }
   } catch {}
+  // what they wear down the pub rides along with the face (avatar.js ignores keys it doesn't know)
+  const dress = await dressFor(env, uniq);
+  for (const id of uniq) out[id] = { ...(out[id] || {}), dress: dress[id] };
   return out;
+}
+
+/** The wardrobes (Carl, 10 Nov 2026). Until someone picks, the four regulars get what they'd expect and everyone
+ *  else is a surprise each game. Change yours in the lobby. */
+export const DRESSES = ["lads", "ladies", "any"];
+const DRESS_START = { carl: "lads", nick: "lads", steve: "lads", kate: "ladies" };
+export async function dressFor(env, ids) {
+  const out = {};
+  for (const id of ids) out[id] = DRESS_START[id] || "any";
+  if (!ids.length) return out;
+  try {
+    const r = await env.DB.prepare(`SELECT player_id, dress FROM gh_prefs WHERE player_id IN (${ids.map(() => "?").join(",")})`).bind(...ids).all();
+    for (const p of r.results) if (DRESSES.includes(p.dress)) out[p.player_id] = p.dress;
+  } catch {}   // before the table exists
+  return out;
+}
+export async function setDress(env, id, dress) {
+  if (!DRESSES.includes(dress)) return false;
+  await env.DB.prepare("INSERT INTO gh_prefs (player_id, dress, updated_at) VALUES (?, ?, ?) ON CONFLICT(player_id) DO UPDATE SET dress = excluded.dress, updated_at = excluded.updated_at").bind(id, dress, Date.now()).run();
+  return true;
 }
