@@ -6,3 +6,5 @@ either way). Data lives in the shared **wwg** D1 database: only touch `gh_` tabl
 
 When giving Carl deploy steps: one copy-paste block, starting with `cd ~/code/guffhead`, including
 `git pull`/`git add`/`git commit`/`git push` as needed. Commit messages are a plain description, no attribution lines.
+
+Every change Carl deploys: bump BUILD (and NOTE) in `public/build.js`, so phones on the old page get the "tap to update" bar.
