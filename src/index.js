@@ -16,13 +16,15 @@
  *   POST /api/games/:id/chat       { text }
  *   GET  /api/record               every finished game I was in
  *   GET  /api/league               the Guffhead league: 💩 counts (only losing scores)
+ *   GET  /api/logbook              finished games between people in my circle
+ *   POST /api/games/:id/nudge      a tap on the shoulder for whoever's keeping us waiting (after 2 hours)
  *   GET  /api/push/key, POST /api/push/subscribe, /api/push/unsubscribe, /api/push/test
  *   GET  /api/health
  *
  * The cron (wrangler.toml) runs the idle timer: GuffBot plays the go of anyone who's left it too long.
  */
 
-import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, sweep, Refusal } from "./game.js";
+import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, sweep, nudge, doing, doingAt, logbook, goodNews, Refusal } from "./game.js";
 import { BOTS } from "../public/bot.js";
 import { DEFAULTS } from "../public/rules.js";
 import { sha256, randomToken, findPlayer, opponentsOf, looksFor } from "./people.js";
@@ -109,7 +111,8 @@ async function api(request, env, ctx, path, url) {
     const games = await listGames(env, who);
     const ids = [who.id, ...opponents.map((o) => o.id), ...games.flatMap((g) => g.players)];
     const lg = await league(env, who, opponents);
-    return json({ league: lg, me: { id: who.id, name: who.name, isAdmin: who.isAdmin }, opponents, house: HOUSE, games, looks: await looksFor(env, ids), defaults: DEFAULTS, push: pushConfigured(env), build: BUILD, note: BUILD_NOTE });
+    const news = await goodNews(env, who).catch(() => []);
+    return json({ league: lg, news, me: { id: who.id, name: who.name, isAdmin: who.isAdmin }, opponents, house: HOUSE, games, looks: await looksFor(env, ids), defaults: DEFAULTS, push: pushConfigured(env), build: BUILD, note: BUILD_NOTE });
   }
   if (path === "/api/games" && m === "GET") return json({ build: BUILD, games: await listGames(env, who) });
   if (path === "/api/games" && m === "POST") {
@@ -118,6 +121,12 @@ async function api(request, env, ctx, path, url) {
     return json({ game: viewFor(st, who.id) });
   }
   if (path === "/api/record" && m === "GET") return json({ record: await record(env, who) });
+  if (path === "/api/logbook" && m === "GET") {
+    const circle = await opponentsOf(env, who.id);
+    const games = await logbook(env, who, circle);
+    const names = Object.fromEntries([[who.id, who.name], ...circle.map((c) => [c.id, c.name]), ...HOUSE.map((h) => [h.id, h.name])]);
+    return json({ games, names, circle, looks: await looksFor(env, [who.id, ...circle.map((c) => c.id)]) });
+  }
   if (path === "/api/league" && m === "GET") {
     const circle = await opponentsOf(env, who.id);
     const lg = await league(env, who, circle);
@@ -126,8 +135,11 @@ async function api(request, env, ctx, path, url) {
 
   let mm = path.match(/^\/api\/games\/([a-z0-9]{6})$/);
   if (mm && m === "GET") {
-    const st = await getGame(env, who, mm[1]);
-    const here = url.searchParams.get("here");
+    const st = await getGame(env, who, mm[1], opponentsOf);
+    const player = st.players.includes(who.id);
+    const here = player && url.searchParams.get("here");
+    const what = url.searchParams.get("doing");
+    if (player && (what === "looking" || what === "picking")) await doing(env, st.id, who.id, what);
     // the phone says it's at the table (every few seconds while it's open): that's presence and "seen" in one
     if (here) await seen(env, st.id, who.id, st.g.seq);
     const before = await lazyAutopilot(env, st, here ? who.id : null);
@@ -135,11 +147,13 @@ async function api(request, env, ctx, path, url) {
     const since = Math.max(0, Number(url.searchParams.get("since") || 0));
     const chatSince = Math.max(0, Number(url.searchParams.get("chat") || 0));
     if (here && before) await seen(env, st.id, who.id, st.g.seq);
-    const [pres, chat] = await Promise.all([
+    const [pres, chat, busy] = await Promise.all([
       presence(env, st.id),
-      env.DB.prepare(`SELECT id, player_id, text, created_at FROM gh_chat WHERE game_id = ? AND id > ? ORDER BY id DESC LIMIT 60`).bind(st.id, chatSince).all(),
+      player ? env.DB.prepare(`SELECT id, player_id, text, created_at FROM gh_chat WHERE game_id = ? AND id > ? ORDER BY id DESC LIMIT 80`).bind(st.id, chatSince).all() : { results: [] },
+      doingAt(env, st.id),
     ]);
-    return json({ build: BUILD, note: BUILD_NOTE, game: viewFor(st, who.id, since), here: hereNow(pres).filter((p) => p !== who.id), chat: chat.results.reverse(), looks: since ? undefined : await looksFor(env, st.players) });
+    delete busy[who.id];
+    return json({ build: BUILD, note: BUILD_NOTE, game: viewFor(st, who.id, since), here: hereNow(pres).filter((p) => p !== who.id), doing: busy, chat: chat.results.reverse(), looks: since ? undefined : await looksFor(env, st.players) });
   }
   mm = path.match(/^\/api\/games\/([a-z0-9]{6})\/act$/);
   if (mm && m === "POST") {
@@ -149,6 +163,8 @@ async function api(request, env, ctx, path, url) {
     later(ctx, notify(env, st, before));
     return json({ game: viewFor(st, who.id, Math.max(0, Number((b && b.since) || 0))) });
   }
+  mm = path.match(/^\/api\/games\/([a-z0-9]{6})\/nudge$/);
+  if (mm && m === "POST") { const st = await nudge(env, who, mm[1]); return json({ ok: true, nudged: st.nudged }); }
   mm = path.match(/^\/api\/games\/([a-z0-9]{6})\/again$/);
   if (mm && m === "POST") {
     const r = await again(env, who, mm[1], opponentsOf);

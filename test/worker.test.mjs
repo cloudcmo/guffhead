@@ -103,4 +103,25 @@ assert.equal(r6.game.loser, "kate");
 // chat only where there are people to chat to
 assert.equal((await call(`/api/games/${g1.game.id}/chat`, { token: carl, method: "POST", body: { text: "hello" } })).status, 400);
 assert.equal((await call(`/api/games/${id2}/chat`, { token: carl, method: "POST", body: { text: "Unlucky" } })).ok, true);
+// 10 Nov additions: replay data, watching, the logbook, nudges, "picking cards…", the stat line
+const fin = await call(`/api/games/${id2}`, { token: carl });
+assert.ok(fin.game.g.events.find((e) => e.k === "start" && e.deal), "a finished game carries its deal, for the replay");
+assert.ok(Array.isArray(fin.game.fuss), "fusses worked out at the end");
+const watch = await call(`/api/games/${id2}`, { token: kate });
+assert.equal(watch.status, 200, "Kate, who plays Carl and Nick, can watch their finished game");
+assert.equal(watch.game.watching, true); assert.deepEqual(watch.chat, [], "but never the chat");
+const live = await call("/api/games", { token: carl, method: "POST", body: { players: ["nick"] } });
+assert.equal((await call(`/api/games/${live.game.id}`, { token: kate })).status, 403, "a game in progress stays private");
+const mid = await call(`/api/games/${live.game.id}`, { token: nick });
+assert.ok(!mid.game.g.events.find((e) => e.k === "start" && e.deal), "no deal on show mid-game");
+const lb = await call("/api/logbook", { token: carl });
+assert.ok(lb.games.find((g) => g.id === id2), "logbook has the friends' game");
+const nd = await call(`/api/games/${live.game.id}/nudge`, { token: carl, method: "POST" });
+assert.equal(nd.status, 400, "no nudging straight away"); assert.match(nd.error, /couple of hours|Nobody/);
+await call(`/api/games/${live.game.id}?here=1&doing=picking`, { token: nick });
+const seenBy = await call(`/api/games/${live.game.id}?here=1`, { token: carl });
+assert.equal(seenBy.doing.nick, "picking", "Carl sees Nick picking cards");
+const me2 = await call("/api/me", { token: carl });
+assert.ok(Array.isArray(me2.news), "the stat line");
+assert.ok(me2.games.every((g) => Array.isArray(g.looking) || g.status !== "playing"), "who's looking, per table");
 console.log(`worker: ok. Loser of the friends' game: ${loser}, carried into the next game and top of the 💩 league.`);

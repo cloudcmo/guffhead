@@ -70,3 +70,12 @@ CREATE TABLE IF NOT EXISTS gh_chat (
   created_at  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS gh_chat_game ON gh_chat (game_id, id);
+
+-- What someone at the table is doing right now ("Nick is picking cards…"), for a few seconds at a time
+CREATE TABLE IF NOT EXISTS gh_doing (
+  game_id    TEXT NOT NULL,
+  player_id  TEXT NOT NULL,
+  what       TEXT NOT NULL,            -- looking | picking
+  at         INTEGER NOT NULL,
+  PRIMARY KEY (game_id, player_id)
+);

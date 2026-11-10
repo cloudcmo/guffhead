@@ -180,3 +180,35 @@ for (const s of combos) for (let k = 0; k < 25; k++) {
   games++; maxTurns = Math.max(maxTurns, st.turns); totalTurns += st.turns;
 }
 console.log(`rules: ${n} checks, ${games} whole games over ${combos.length} rule sets ok. Turns per game: average ${(totalTurns / games).toFixed(0)}, most ${maxTurns}. Forced (played for you): ${(100 * forcedShare / decisions).toFixed(0)}% of goes.`);
+
+// the replay rebuilds every finished game exactly: hands, pile and burned count at the end match the real game
+import { at, steps, canReplay } from "../public/replay.js";
+let replayed = 0;
+for (let k = 0; k < 300; k++) {
+  const s = combos[k % combos.length];
+  const ids = ["a", "b", "c", "d"].slice(0, 2 + (k % 3));
+  const st = R.newGame(ids, s, rnd);
+  for (const p of st.seats) R.setUp(st, p.id, chooseUp([...p.hand, ...p.up], st.settings));
+  for (const p of st.seats) R.ready(st, p.id);
+  while (st.phase === "play") { const id = st.seats[st.turn].id; R.perform(st, id, R.forcedMove(st) || choose(st, k % 2 ? "msguffbot" : "guffbot", rnd)); }
+  if (st.turns >= R.TURN_LIMIT) continue;
+  const v = R.viewFor(st, "a");
+  assert.ok(canReplay(v.events));
+  const end = at(v.events, steps(v.events).length, st.settings);
+  for (const p of st.seats) {
+    const r = end.seats.find((x) => x.id === p.id);
+    assert.deepEqual(r.hand.slice().sort(), p.hand.slice().sort(), "hand matches");
+    assert.deepEqual(r.up.slice().sort(), p.up.slice().sort());
+    assert.equal(r.down.length, p.down.length);
+  }
+  assert.deepEqual(end.pile, st.pile); assert.equal(end.burned, st.burned);
+  // mid-game view hides the deal from phones
+  replayed++;
+}
+{
+  const st = R.newGame(["a", "b"], {}, rnd);
+  for (const p of st.seats) R.ready(st, p.id);
+  const v = R.viewFor(st, "a");
+  assert.ok(!v.events.find((e) => e.k === "start").deal, "deal hidden mid-game");
+}
+console.log(`replay: ${replayed} finished games rebuilt exactly from the deal`);

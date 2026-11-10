@@ -150,8 +150,11 @@ export function viewFor(st, pid, since = 0) {
   if (myGo && st.g.phase === "play") { out.options = R.options(st.g); out.hint = hint(st.g, pid); }
   if (st.g.phase === "swap") {
     const p = st.g.seats[R.seatOf(st.g, pid)];
-    if (p) out.six = sortSix([...p.hand, ...p.up], st.settings);
+    if (p) { out.six = sortSix([...p.hand, ...p.up], st.settings); out.suggest = chooseUp(out.six, st.settings); }
   }
+  out.nudged = st.nudged || null;
+  out.fuss = st.fuss || [];
+  out.watching = !st.players.includes(pid);
   return out;
 }
 const sortSix = (cs, s) => R.sortCards(cs, s);
@@ -166,6 +169,7 @@ export function summary(st, pid) {
     myGo: required(st).includes(pid), required: required(st), phase: g.phase, loser: st.loser || null, wearer: wearer(st),
     practice: st.bots.length > 0, bots: st.bots, updated: st.updated, finished: st.finished || null, seq: g.seq,
     left: Object.fromEntries(g.seats.map((p) => [p.id, R.cardsLeft(p)])),
+    waitingSince: st.lastAct, nudgedAt: st.nudged ? st.nudged.at : null,
     last: last ? describe(last, names, pid) : null,
   };
 }
@@ -185,7 +189,10 @@ export async function save(env, st, isNew = false) {
   const ver = st._ver || 0;
   delete st._ver;
   const recordIt = st.status === "finished" && !st._recorded;
-  if (recordIt) st._recorded = true;
+  if (recordIt) {
+    st._recorded = true;
+    try { st.fuss = await fussFor(env, st); } catch (e) { console.error("fuss", e); st.fuss = []; }
+  }
   const json = JSON.stringify(st);
   const req = required(st).join(",");
   const stmts = [];
@@ -198,7 +205,7 @@ export async function save(env, st, isNew = false) {
   if (recordIt) {
     stmts.push(env.DB.prepare(`INSERT OR IGNORE INTO gh_results (game_id, players, loser, practice, detail, finished_at) VALUES (?, ?, ?, ?, ?, ?)`).bind(
       st.id, st.players.join(","), st.loser || null, st.bots.length ? 1 : 0,
-      JSON.stringify({ order: st.g.finished, turns: st.g.turns, burns: st.g.burns, settings: st.settings, resigned: st.g.events.some((e) => e.k === "over" && e.resigned) }),
+      JSON.stringify({ order: st.g.finished, turns: st.g.turns, burns: st.g.burns, burnsBy: st.g.burnsBy || {}, burnBest: st.g.burnBest || {}, settings: st.settings, resigned: st.g.events.some((e) => e.k === "over" && e.resigned) }),
       st.finished || now()));
   }
   const res = await env.DB.batch(stmts);
@@ -307,6 +314,117 @@ export async function league(env, who, circle) {
   return { table, current };
 }
 
+/* ---------- GuffBot makes a fuss (borrowed from CountGuff): records and streaks at the end of a game ---------- */
+
+/**
+ * Worked out once, as a game finishes, from every earlier finished game: a personal best burn, out first in a row,
+ * a clean streak (games without a 💩), and a 💩 hat-trick (the same person losing three in a row to the same
+ * players). Each is { pid, kind, emoji, text } with text from that player's point of view ("you" is filled in later).
+ */
+export async function fussFor(env, st) {
+  const humans = st.players.filter((p) => !isBot(p));
+  if (!humans.length) return [];
+  const q = humans.map(() => "?").join(",");
+  const r = await env.DB.prepare(
+    `SELECT r.game_id, r.players, r.loser, r.detail, r.finished_at FROM gh_results r JOIN gh_game_players p ON p.game_id = r.game_id
+      WHERE p.player_id IN (${q}) AND r.game_id <> ? GROUP BY r.game_id ORDER BY r.finished_at DESC LIMIT 400`,
+  ).bind(...humans, st.id).all();
+  const past = r.results.map((x) => ({ ...x, players: x.players.split(","), detail: JSON.parse(x.detail || "{}") }));
+  const out = [];
+  const g = st.g;
+  for (const pid of humans) {
+    const mine = past.filter((x) => x.players.includes(pid));
+    // biggest pile burned
+    const now = (g.burnBest || {})[pid] || 0;
+    const before = Math.max(0, ...mine.map((x) => (x.detail.burnBest || {})[pid] || 0));
+    if (now >= 6 && now > before) out.push({ pid, kind: "pb", emoji: "🔥", text: `burned ${now} cards in one go: a personal best${before ? ` (was ${before})` : ""}` });
+    // out first, games running
+    if (g.finished[0] === pid) {
+      let run = 1; for (const x of mine) { if ((x.detail.order || [])[0] === pid) run++; else break; }
+      if (run >= 3) out.push({ pid, kind: "streak", emoji: "🥇", text: `out first ${run} games running` });
+    }
+    // a clean streak: games in a row without the 💩
+    if (st.loser !== pid) {
+      let run = 1; for (const x of mine) { if (x.loser !== pid) run++; else break; }
+      if (run >= 5 && (run % 5 === 0 || run === mine.length + 1)) out.push({ pid, kind: "clean", emoji: "💪", text: `${run} games without a 💩` });
+    }
+  }
+  // the 💩 hat-trick: the same loser three times running between exactly these players
+  if (st.loser) {
+    const key = st.players.slice().sort().join(",");
+    const same = past.filter((x) => x.players.slice().sort().join(",") === key);
+    let run = 1; for (const x of same) { if (x.loser === st.loser) run++; else break; }
+    if (run >= 3) out.push({ pid: st.loser, kind: "hattrick", emoji: "💩", text: `the Guffhead ${run} games running`, share: true });
+  }
+  return out;
+}
+
+/* ---------- nudges (borrowed from CountGuff) ---------- */
+export const NUDGE_MS = 2 * 3600000;
+export async function nudge(env, who, id) {
+  const st = await load(env, id);
+  if (!st.players.includes(who.id)) no("That's not one of your games", 403);
+  if (st.status !== "playing") no("This one's finished");
+  const waiting = required(st).filter((p) => !isBot(p) && p !== who.id);
+  if (!waiting.length) no("Nobody to nudge");
+  if (now() - st.lastAct < NUDGE_MS) no("Give them a couple of hours first");
+  if (st.nudged && now() - st.nudged.at < NUDGE_MS) no("They've been nudged recently");
+  st.nudged = { by: who.id, at: now() };
+  await save(env, st);
+  await Promise.allSettled(waiting.map((pid) => notifyPlayers(env, [pid], { title: "Guffhead", body: `👉 ${st.names[who.id]} gives you a nudge. It's your go.`, url: `/#/game/${st.id}`, tag: `gh-${st.id}` })));
+  return st;
+}
+
+/* ---------- what people are doing at the table (Words and Guff's "Steve is looking 👀" / "placing…") ---------- */
+export async function doing(env, gameId, pid, what) {
+  await env.DB.prepare(`INSERT INTO gh_doing (game_id, player_id, what, at) VALUES (?, ?, ?, ?) ON CONFLICT(game_id, player_id) DO UPDATE SET what = excluded.what, at = excluded.at`).bind(gameId, pid, what, now()).run();
+}
+export async function doingAt(env, gameId) {
+  try {
+    const r = await env.DB.prepare(`SELECT player_id, what, at FROM gh_doing WHERE game_id = ? AND at > ?`).bind(gameId, now() - PRESENT_MS).all();
+    return Object.fromEntries(r.results.map((x) => [x.player_id, x.what]));
+  } catch { return {}; }
+}
+/** Who's at each of my tables right now, for the lobby: { gameId: [pids] }. */
+export async function lookingAt(env, ids, me) {
+  if (!ids.length) return {};
+  const q = ids.map(() => "?").join(",");
+  const r = await env.DB.prepare(`SELECT game_id, player_id FROM gh_seen WHERE game_id IN (${q}) AND seen_at > ? AND player_id <> ?`).bind(...ids, now() - PRESENT_MS, me).all();
+  const out = {};
+  for (const x of r.results) (out[x.game_id] = out[x.game_id] || []).push(x.player_id);
+  return out;
+}
+
+/* ---------- the Logbook and the stat line ---------- */
+/** Finished games between people in my circle (as CountGuff's Logbook): newest first. */
+export async function logbook(env, who, circle) {
+  const ids = new Set([who.id, ...circle.map((c) => c.id)]);
+  const r = await env.DB.prepare(`SELECT game_id, players, loser, practice, detail, finished_at FROM gh_results ORDER BY finished_at DESC LIMIT 600`).all();
+  return r.results
+    .map((x) => ({ id: x.game_id, players: x.players.split(","), loser: x.loser, practice: !!x.practice, finished: x.finished_at, order: (JSON.parse(x.detail || "{}").order || []) }))
+    .filter((x) => x.players.some((p) => ids.has(p)) && x.players.every((p) => ids.has(p) || isBot(p)))
+    .slice(0, 150);
+}
+/** Lines about me that are always good news (Words and Guff's stat line): one is shown a day. */
+export async function goodNews(env, who) {
+  const r = await env.DB.prepare(`SELECT r.loser, r.detail, r.finished_at FROM gh_results r JOIN gh_game_players p ON p.game_id = r.game_id WHERE p.player_id = ? ORDER BY r.finished_at DESC LIMIT 400`).bind(who.id).all();
+  const g = r.results.map((x) => ({ loser: x.loser, at: x.finished_at, d: JSON.parse(x.detail || "{}") }));
+  if (!g.length) return [];
+  const out = [];
+  let clean = 0; for (const x of g) { if (x.loser !== who.id) clean++; else break; }
+  if (clean >= 2) out.push(`💪 ${clean} games in a row without a 💩`);
+  const first = g.filter((x) => (x.d.order || [])[0] === who.id).length;
+  if (first) out.push(`🥇 Out first ${first} time${first > 1 ? "s" : ""}`);
+  const month = new Date(); month.setUTCDate(1); month.setUTCHours(0, 0, 0, 0);
+  const burns = g.filter((x) => x.at >= month.getTime()).reduce((a, x) => a + ((x.d.burnsBy || {})[who.id] || 0), 0);
+  if (burns) out.push(`🔥 ${burns} burn${burns > 1 ? "s" : ""} this month`);
+  const best = Math.max(0, ...g.map((x) => (x.d.burnBest || {})[who.id] || 0));
+  if (best >= 5) out.push(`🚒 Biggest burn: ${best} cards in one go`);
+  const safe = g.filter((x) => x.loser !== who.id).length;
+  if (safe) out.push(`😅 Got away with it ${safe} time${safe > 1 ? "s" : ""} out of ${g.length}`);
+  return out;
+}
+
 /* ---------- the actions, with the database ---------- */
 
 export async function createGame(env, who, body, opponentsOf) {
@@ -346,10 +464,15 @@ export async function again(env, who, id, opponentsOf) {
   return { id: st.id, existing: false, st };
 }
 
-export async function getGame(env, who, id) {
+export async function getGame(env, who, id, opponentsOf = null) {
   const st = await load(env, id);
-  if (!st.players.includes(who.id)) no("That's not one of your games", 403);
-  return st;
+  if (st.players.includes(who.id)) return st;
+  // a finished game can be watched (replay and all, never the chat) by anyone who plays someone at that table
+  if (st.status === "finished" && opponentsOf) {
+    const mine = new Set((await opponentsOf(env, who.id)).map((o) => o.id));
+    if (st.players.some((p) => mine.has(p))) return st;
+  }
+  no("That's not one of your games", 403);
 }
 
 /** Load, act, save. Returns { st, before } so the caller can send notifications after replying. */
@@ -398,7 +521,12 @@ export async function listGames(env, who) {
   const r = await env.DB.prepare(
     `SELECT g.state FROM gh_games g JOIN gh_game_players p ON p.game_id = g.id WHERE p.player_id = ? AND (g.status = 'playing' OR g.updated_at > ?) ORDER BY g.updated_at DESC LIMIT 40`,
   ).bind(who.id, now() - 30 * 86400000).all();
-  return r.results.map((x) => summary(JSON.parse(x.state), who.id));
+  const games = r.results.map((x) => summary(JSON.parse(x.state), who.id));
+  try {
+    const look = await lookingAt(env, games.filter((g) => g.status === "playing").map((g) => g.id), who.id);
+    for (const g of games) g.looking = look[g.id] || [];
+  } catch {}
+  return games;
 }
 
 /** Every finished game I was in: how often I've been the Guffhead, and against whom. */

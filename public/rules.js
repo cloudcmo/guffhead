@@ -126,7 +126,7 @@ export function newGame(players, settings, rnd) {
   return st;
 }
 
-const EVENTS_KEEP = 300;
+const EVENTS_KEEP = 1500;   // enough for a whole game, so a finished game can be replayed from the deal
 function ev(st, e) {
   st.seq++;
   st.events.push({ seq: st.seq, ...e });
@@ -193,7 +193,9 @@ function begin(st) {
     }
   });
   st.turn = best ? best.i : 0;
-  ev(st, { k: "start", p: st.seats[st.turn].id, card: best ? best.c : null });
+  // the deal as play begins, for the replay of a finished game (hidden from phones until it's over: viewFor)
+  const deal = st.seats.map((p) => ({ id: p.id, hand: p.hand.slice(), up: p.up.slice(), down: p.down.slice() }));
+  ev(st, { k: "start", p: st.seats[st.turn].id, card: best ? best.c : null, deal, draw: st.draw.slice() });
 }
 
 /* ---------- what can be done ---------- */
@@ -303,12 +305,19 @@ function land(st, p, cards, zone, mark) {
   if (burn) e.burn = burn;
   if (reverse) e.reverse = st.dir;
   ev(st, e);
-  if (burn) { st.burned += st.pile.length; st.burns++; st.gone.push(...st.pile); st.pile = []; }
+  if (burn) {
+    st.burned += st.pile.length; st.burns++; st.gone.push(...st.pile);
+    st.burnsBy = st.burnsBy || {}; st.burnBest = st.burnBest || {};
+    st.burnsBy[p.id] = (st.burnsBy[p.id] || 0) + 1;
+    st.burnBest[p.id] = Math.max(st.burnBest[p.id] || 0, st.pile.length);
+    st.pile = [];
+  }
   // back up to three while the pack lasts
   if (zone === "hand" && st.draw.length && p.hand.length < HAND) {
     const n = Math.min(HAND - p.hand.length, st.draw.length);
-    p.hand = sortCards(p.hand.concat(st.draw.splice(0, n)), s);
-    ev(st, { k: "draw", p: p.id, n, left: st.draw.length });
+    const drawn = st.draw.splice(0, n);
+    p.hand = sortCards(p.hand.concat(drawn), s);
+    ev(st, { k: "draw", p: p.id, n, left: st.draw.length, cards: drawn });   // cards: the drawer's eyes only (viewFor)
   }
   if (!cardsLeft(p)) goOut(st, p);
   if (st.phase !== "play") return;
@@ -404,8 +413,15 @@ export function viewFor(st, id) {
         downCards: over ? p.down.slice() : undefined,
       };
     }),
-    events: st.events.slice(),
+    events: st.events.map((e) => privateOut(e, id, over)),
   };
+}
+/** What a phone may see of an event: the deal and drawn cards stay hidden until the game's over (your own draws excepted). */
+function privateOut(e, id, over) {
+  if (over) return e;
+  if (e.k === "start" && e.deal) { const { deal, draw, ...rest } = e; return rest; }
+  if (e.k === "draw" && e.cards && e.p !== id) { const { cards, ...rest } = e; return rest; }
+  return e;
 }
 
 /** Cards a player hasn't seen anywhere (for Ms GuffBot's sums and the hints): the rest of the deck. */

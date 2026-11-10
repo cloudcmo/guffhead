@@ -22,13 +22,16 @@
 <body>
 <header class="top">
   <a class="brand" href="#/" aria-label="Guffhead home"><span class="sign"><img src="guffbot.webp" alt=""><span><b>The Guff's Head</b><small>Guffhead · back room</small></span></span></a>
-  <nav class="topnav" id="topnav" hidden>
-    <a href="#/">Tables</a>
-    <a href="#/league">💩 League</a>
-  </nav>
+  <a class="backlink" id="backlink" href="#/" hidden>◂ Tables</a>
 </header>
 <main id="app" class="app"></main>
 <div id="toast" class="toast" hidden></div>
+<nav class="bottomnav" id="bottomnav" hidden>
+  <a href="#/" data-tab="tables"><i>🃏</i>Tables</a>
+  <a href="#/league" data-tab="league"><i>💩</i>League</a>
+  <a href="#/logbook" data-tab="logbook"><i>📖</i>Logbook</a>
+  <a href="#/record" data-tab="record"><i>📋</i>Record</a>
+</nav>
 <script src="avatar.js"></script>
 <script src="jumper.js"></script>
 <script src="app.js" type="module"></script>

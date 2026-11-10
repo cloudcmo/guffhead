@@ -20,6 +20,28 @@ Words and Guff, without the gaps between turns making it stilted. The five thing
 on their head and stays there, game after game between those same players, until someone else loses. The league
 (`#/league`) counts 💩s in games with at least two people; games against just the house are practice.
 
+## What came over from CountGuff and Words and Guff (10 Nov 2026, from the usability review)
+- **Steady table**: the catch-up plays over the table (nothing below moves); tap it to jump on, Skip always there,
+  faster when there's a queue. "Next" on the next player's box; bigger opponent cards; a cards-left race strip.
+  The swap pre-picks your best three. Tab title "(1) Your go", the app badge, haptics on Android.
+- **Social**: chat in a tab under your hand, a peek under the table with a red unread count, your five recent emoji on
+  a quick row, emoji on their own shown big, throw an emoji at someone's go. "Nick is looking 👀" / "picking cards…"
+  (gh_doing) in the game and the lobby. The welcome sheet for notifications and the Home Screen (three times at most).
+  Nudge after 2 hours (`POST /api/games/:id/nudge`). "Your go v Nick" toast after each go.
+- **Play feel**: double-tap a card to play it and its matching cards, or drag it onto the pile. Pick cards while you
+  wait (played only when you tap Play, and only if they still go). The first few times you're about to spend a 10 or 2
+  when an ordinary card would go, the button asks once. GuffBot's poses on big moments (`Jumper.pose`). Bad news lands
+  with a bouncing emoji ("while you were away"). Biscuit the dog visits after a minute's stare.
+- **Shorter page**: tabs under your hand (Chat, Log, Rules, Table); bottom navigation (Tables, 💩 League, Logbook,
+  Record); house rules in two groups.
+- **The occasion**: a chalkboard per game (`public/poster.js`), the lobby thumbnail and the end card with the result
+  chalked on, shared as a picture. Rare-moment shares (four of a kind, out on a blind flip, a 12-card bonfire). The
+  replay (`public/replay.js`, `#/replay/:id`): every hand face up, step or play through; the deal and drawn cards are
+  recorded but hidden until the game ends. Fusses at the end (personal-best burn, out first in a row, clean streaks, the
+  💩 hat-trick). The good-news stat line. The Logbook (`#/logbook`): friends can watch each other's finished games.
+- **The 70s look**: GuffBot in a tweed flat cap; Ms GuffBot in a knotted hanky with a cigarette on the go. December:
+  Santa hats, tinsel on the sign, snow, and a cracker on the end card.
+
 ## House rules (per game, set when dealing)
 Defaults: a **2** goes on anything and resets the pile; a **10** goes on anything and burns the pile (the burner goes
 again); **four of a kind** burns. You can play several of the same value at once (a pair of 6s on a 6 or lower); four the same, at once or built up
