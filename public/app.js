@@ -196,6 +196,7 @@ function route() {
   paper(gm ? seedOf(gm[2]) : BAR_SEED);
   nav(h);
   stopIdle();
+  const nt = $("nexttoast"); if (nt) nt.remove();
   if (!S.token) return renderLogin();
   let m;
   if ((m = h.match(/^#\/game\/([a-z0-9]{6})/))) return openGame(m[1]);
@@ -382,7 +383,7 @@ function rulesShort(R) {
 const NUDGE_MS = 2 * 3600000;
 function tableRow(g) {
   const heads = g.opps.map((p) => headOf(p, 26, g.wearer === p)).join("");
-  const thumb = `<span class="thumb">${boardSvg({ id: g.id, names: g.players.map((p) => (p === S.me.id ? S.me.name : g.names[p])), loser: g.status === "playing" ? null : g.names[g.loser] || null, size: 74 })}</span>`;
+  const thumb = `<span class="thumb">${boardSvg({ id: g.id, names: g.players.map((p) => (p === S.me.id ? S.me.name : g.names[p])), loser: g.status === "playing" ? null : g.names[g.loser] || null, size: 92 })}</span>`;
   const looking = (g.looking || []).filter((p) => !isHouse(p));
   const humansWaiting = g.required.filter((p) => p !== S.me.id && !isHouse(p));
   const canNudge = g.status === "playing" && !g.myGo && humansWaiting.length && Date.now() - g.waitingSince >= NUDGE_MS && !(g.nudgedAt && Date.now() - g.nudgedAt < NUDGE_MS);
@@ -963,6 +964,8 @@ async function offerNext(fromId) {
   document.body.appendChild(t);
   t.querySelector(".x").onclick = () => t.remove();
   t.querySelector("a").onclick = () => t.remove();
+  clearTimeout(offerNext.t);
+  offerNext.t = setTimeout(() => t.remove(), 15000);
 }
 
 /* ---------- rare moments worth sharing (Words and Guff's Share this move, rare so it never nags) ---------- */
@@ -1269,7 +1272,7 @@ async function renderLogbook() {
         ${people.map((p) => `<button class="chip person${f === p ? " on" : ""}" data-lf="${esc(p)}">${headOf(p, 22)}You v ${esc(nm(p))}</button>`).join("")}
       </div>
       <div class="tables">${rows.length ? rows.map((g) => `<a class="tablerow" href="#/replay/${g.id}">
-        <span class="thumb">${boardSvg({ id: g.id, names: g.players.map((p) => (p === S.me.id ? S.me.name : r.names[p] || p)), loser: g.loser ? (g.loser === S.me.id ? S.me.name : r.names[g.loser]) : null, size: 74 })}</span>
+        <span class="thumb">${boardSvg({ id: g.id, names: g.players.map((p) => (p === S.me.id ? S.me.name : r.names[p] || p)), loser: g.loser ? (g.loser === S.me.id ? S.me.name : r.names[g.loser]) : null, size: 92 })}</span>
         <span class="who"><span class="heads">${g.players.map((p) => headOf(p, 24, p === g.loser)).join("")}</span>${esc(g.players.map(nm).join(", "))}
           <small>${g.loser ? `💩 ${esc(nm(g.loser))}` : "Over"}${g.order.length ? ` · out first: ${esc(nm(g.order[0]))}` : ""}${g.practice ? " · practice" : ""}</small>
           <small class="soft">${new Date(g.finished).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</small></span>
