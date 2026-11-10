@@ -1,6 +1,7 @@
 // Guffhead: the page. The back room of The Guff's Head. Routes: #/  #/game/:id  #/record
 import { needWords, rankOf, isMagic, describeRules, DEFAULTS, IDLE_CHOICES, MAX_PLAYERS, sortCards } from "./rules.js";
 import { comment, describe, weight, room, say, cardName, pluralOf } from "./lines.js";
+import { pick as pickPaper } from "./wallpaper.js";
 
 export const BUILD = "2026-11-10.1";
 const $ = (id) => document.getElementById(id);
@@ -134,11 +135,24 @@ const snap = (n = 1) => { if (sound.on) for (let i = 0; i < n; i++) noise(0.05, 
 const whoosh = () => { if (sound.on) { noise(0.6, 500, 0.6, 0.9); noise(0.4, 1400, 0.8, 0.4, 0.1); } };
 const shuffleSound = () => { if (sound.on) for (let i = 0; i < 10; i++) noise(0.03, 3000, 1, 0.3, i * 0.035); };
 
+/* ---------- the wallpaper: 70s flock or circles, the same for everyone at a table, a fresh one at the bar ---------- */
+const BAR_SEED = Math.floor(Math.random() * 1e9);
+function paper(seed) {
+  const p = pickPaper(seed);
+  if (document.body.dataset.paper === p.id) return p;
+  document.body.dataset.paper = p.id;
+  document.body.style.background = `radial-gradient(ellipse 120% 90% at 50% 30%, rgba(10, 6, 4, .05), rgba(10, 6, 4, .55)), linear-gradient(rgba(10, 6, 4, .22), rgba(10, 6, 4, .22)), ${p.css}`;
+  document.body.style.backgroundAttachment = "fixed";
+  return p;
+}
+
 /* ---------- routing ---------- */
 function route() {
   clearInterval(S.poll); S.poll = 0;
   const h = location.hash || "#/";
   $("topnav").hidden = !S.token;
+  const gm = h.match(/^#\/game\/([a-z0-9]{6})/);
+  paper(gm ? seedOf(gm[1]) : BAR_SEED);
   if (!S.token) return renderLogin();
   let m;
   if ((m = h.match(/^#\/game\/([a-z0-9]{6})/))) return openGame(m[1]);
@@ -494,7 +508,7 @@ function renderGame(staging = false) {
       <details class="log"><summary>This table's house rules</summary><ul class="rulelist">${describeRules(s).map(([k, v]) => `<li><b>${esc(k)}</b> ${esc(v)}</li>`).join("")}<li><b>Idle timer</b> ${s.idleHours ? `GuffBot plays anyone's go after ${s.idleHours} hours.` : "Off: we wait."}</li></ul></details>
       <details class="howto"><summary>How to play</summary>${howTo(s)}</details>
       ${G.status === "playing" && G.players.includes(S.me.id) ? `<details class="menu"><summary>More</summary><button class="btn ghost" id="resign">Leave the table (you'll be the Guffhead)</button></details>` : ""}
-      <p class="foot"><a href="#/">Back to the bar</a> · <a href="https://hub.carlosfandango.net/">All the Guff games</a></p>
+      <p class="foot"><a href="#/">Back to the bar</a> · <a href="https://hub.carlosfandango.net/">All the Guff games</a><br><small class="soft">Tonight's wallpaper: ${esc(pickPaper(seedOf(G.id)).name.toLowerCase())}</small></p>
     </section>`;
   wireGame();
   renderChat();

@@ -128,12 +128,14 @@ async function api(request, env, ctx, path, url) {
   let mm = path.match(/^\/api\/games\/([a-z0-9]{6})$/);
   if (mm && m === "GET") {
     const st = await getGame(env, who, mm[1]);
-    const before = await lazyAutopilot(env, st);
+    const here = url.searchParams.get("here");
+    // the phone says it's at the table (every few seconds while it's open): that's presence and "seen" in one
+    if (here) await seen(env, st.id, who.id, st.g.seq);
+    const before = await lazyAutopilot(env, st, here ? who.id : null);
     if (before) later(ctx, notify(env, st, before));
     const since = Math.max(0, Number(url.searchParams.get("since") || 0));
     const chatSince = Math.max(0, Number(url.searchParams.get("chat") || 0));
-    // the phone says it's at the table (every few seconds while it's open): that's presence and "seen" in one
-    if (url.searchParams.get("here")) await seen(env, st.id, who.id, st.g.seq);
+    if (here && before) await seen(env, st.id, who.id, st.g.seq);
     const [pres, chat] = await Promise.all([
       presence(env, st.id),
       env.DB.prepare(`SELECT id, player_id, text, created_at FROM gh_chat WHERE game_id = ? AND id > ? ORDER BY id DESC LIMIT 60`).bind(st.id, chatSince).all(),

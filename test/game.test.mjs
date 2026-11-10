@@ -16,7 +16,7 @@ for (let k = 0; k < 150; k++) {
   assert.deepEqual(required(st), ["carl"], "only Carl to swap");
   const v0 = viewFor(st, "carl");
   assert.equal(v0.six.length, 6);
-  perform(st, "carl", { act: "ready", up: chooseUp(v0.six, st.settings) }, rnd);
+  perform(st, "carl", { act: "ready", up: chooseUp(v0.six, st.settings) }, rnd, new Set());
   let decisions = 0;
   while (st.status === "playing") {
     assert.deepEqual(required(st), ["carl"], "the house never keeps you waiting");
@@ -25,7 +25,8 @@ for (let k = 0; k < 150; k++) {
     assert.equal(R.forcedMove(st.g), null, "a forced move is never left for you");
     const others = v.g.seats.filter((p) => p.id !== "carl");
     assert.ok(others.every((p) => typeof p.hand === "number"), "others' hands hidden");
-    perform(st, "carl", { ...choose(st.g, "guffbot", rnd), seq: st.g.seq }, rnd);
+    // Carl's phone is away from the table between goes, so forced moves are played for him
+    perform(st, "carl", { ...choose(st.g, "guffbot", rnd), seq: st.g.seq }, rnd, new Set());
     decisions++;
   }
   assert.ok(st.loser);
@@ -55,6 +56,30 @@ for (let k = 0; k < 150; k++) {
   assert.throws(() => perform(st, "steve", { act: "pickup" }, rnd), /not at this table/);
   const s = summary(st, "carl");
   assert.ok(s.last, "lobby line");
+  checks++;
+}
+
+// live at the table: a forced move is left for you to make, and played for you once you've gone
+{
+  let held = 0, played = 0;
+  for (let k = 0; k < 60; k++) {
+    const st = newTable(["carl", "guffbot"], { carl: "Carl", guffbot: "GuffBot" }, {}, rnd);
+    runHouse(st, rnd);
+    perform(st, "carl", { act: "ready" }, rnd);           // Carl's here (he just acted)
+    while (st.status === "playing") {
+      if (st.held) {
+        assert.equal(st.held, "carl"); assert.ok(R.forcedMove(st.g), "held only when forced");
+        held++;
+        if (held % 2) { perform(st, "carl", { ...R.forcedMove(st.g), seq: st.g.seq }, rnd); continue; }   // he taps it himself
+        runHouse(st, rnd, new Set()); played++;            // he's left: played for him
+        assert.ok(!st.held || st.held === undefined);
+        continue;
+      }
+      if (st.status !== "playing") break;
+      perform(st, "carl", { ...choose(st.g, "guffbot", rnd), seq: st.g.seq }, rnd);
+    }
+  }
+  assert.ok(held > 20 && played > 5, `held ${held}, played after leaving ${played}`);
   checks++;
 }
 

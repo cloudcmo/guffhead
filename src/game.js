@@ -46,9 +46,15 @@ export function required(st) {
   return [];
 }
 
-/** Let the game run on: the house plays, and forced moves are made, until someone has a real decision. */
-export function runHouse(st, rand = rnd) {
+/**
+ * Let the game run on: the house plays, and forced moves are made, until someone has a real decision.
+ * present: who's at the table right now. Their forced moves are left for them to make themselves (Carl, 10 Nov
+ * 2026: "if I am live in the game, do not auto-play for me even if I have only one option"); st.held marks one
+ * waiting, so it can be played for them once they've gone (settleHeld, and the cron).
+ */
+export function runHouse(st, rand = rnd, present = new Set()) {
   const g = st.g;
+  delete st.held;
   for (let guard = 0; guard < 3000 && st.status === "playing"; guard++) {
     if (g.phase === "swap") {
       const bots = g.seats.filter((p) => !p.ready && isBot(p.id));
@@ -60,6 +66,7 @@ export function runHouse(st, rand = rnd) {
       const id = g.seats[g.turn].id;
       if (isBot(id)) { R.perform(g, id, choose(g, id, rand)); continue; }
       const f = R.forcedMove(g);
+      if (f && present.has(id)) { st.held = id; return; }
       if (f) { R.perform(g, id, f, { forced: true }); continue; }
       return;
     }
@@ -79,7 +86,7 @@ function finish(st) {
  * The idle timer: if the table has waited on someone longer than this game's limit, GuffBot (with Ms GuffBot's
  * brain, so nobody's punished for being busy) plays that one go for them. Returns who was played for.
  */
-export function autopilot(st, t = now(), rand = rnd) {
+export function autopilot(st, t = now(), rand = rnd, present = new Set()) {
   const h = st.settings.idleHours;
   if (st.status !== "playing" || !h || t - st.lastAct < h * 3600000) return [];
   const g = st.g;
@@ -97,7 +104,7 @@ export function autopilot(st, t = now(), rand = rnd) {
     const id = who[0];
     R.perform(g, id, choose(g, "msguffbot", rand), { autopilot: true });
   }
-  runHouse(st, rand);
+  runHouse(st, rand, present);
   st.lastAct = t;
   return who;
 }
@@ -105,7 +112,7 @@ export function autopilot(st, t = now(), rand = rnd) {
 /* ---------- doing something ---------- */
 
 /** { act: setup | ready | play | pickup | flip | resign, up?, cards?, index?, seq? } */
-export function perform(st, pid, body, rand = rnd) {
+export function perform(st, pid, body, rand = rnd, present = new Set([pid])) {
   if (st.status !== "playing") no("This one's finished");
   if (!st.players.includes(pid)) no("You're not at this table", 403);
   const g = st.g;
@@ -123,7 +130,7 @@ export function perform(st, pid, body, rand = rnd) {
     no(e.message);
   }
   if (a !== "setup") st.lastAct = now();
-  runHouse(st, rand);
+  runHouse(st, rand, present);
   if (g.phase === "over") finish(st);
   return st;
 }
@@ -349,23 +356,33 @@ export async function getGame(env, who, id) {
 export async function act(env, who, id, body) {
   const st = await load(env, id);
   const before = { status: st.status, required: required(st) };
-  perform(st, who.id, body);
+  perform(st, who.id, body, rnd, new Set([...hereNow(await presence(env, id)), who.id]));
   await save(env, st);
   return { st, before };
 }
 
-/** On opening a game: if the idle timer has run out on someone, play their go now. */
-export async function lazyAutopilot(env, st) {
+/**
+ * On opening a game (any player's phone, every poll) and on the cron: a forced move held for someone who has since
+ * left the table is played for them, and if the idle timer has run out on someone, GuffBot plays their go.
+ */
+export async function lazyAutopilot(env, st, viewer = null) {
+  if (st.status !== "playing") return null;
   const before = { status: st.status, required: required(st) };
-  const who = autopilot(st);
-  if (!who.length) return null;
+  const here = new Set(hereNow(await presence(env, st.id)));
+  if (viewer) here.add(viewer);
+  let changed = false;
+  if (st.held && !here.has(st.held)) { runHouse(st, rnd, here); changed = true; }
+  if (autopilot(st, now(), rnd, here).length) changed = true;
+  if (!changed) return null;
   try { await save(env, st); } catch (e) { if (!(e instanceof Refusal)) throw e; return null; }
   return before;
 }
 
 /** The cron: every table that's been waiting longer than its idle timer gets GuffBot's help. */
 export async function sweep(env) {
-  const r = await env.DB.prepare(`SELECT id FROM gh_games WHERE status = 'playing' AND updated_at < ? ORDER BY updated_at LIMIT 50`).bind(now() - Math.min(...R.IDLE_CHOICES.filter(Boolean)) * 3600000).all();
+  const r = await env.DB.prepare(
+    `SELECT id FROM gh_games WHERE status = 'playing' AND (updated_at < ? OR (json_extract(state, '$.held') IS NOT NULL AND updated_at < ?)) ORDER BY updated_at LIMIT 50`,
+  ).bind(now() - Math.min(...R.IDLE_CHOICES.filter(Boolean)) * 3600000, now() - PRESENT_MS).all();
   let n = 0;
   for (const { id } of r.results) {
     try {
