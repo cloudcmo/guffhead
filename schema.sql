@@ -79,3 +79,23 @@ CREATE TABLE IF NOT EXISTS gh_doing (
   at         INTEGER NOT NULL,
   PRIMARY KEY (game_id, player_id)
 );
+
+-- Guests: anyone a player has invited with a link (no PIN: their phone keeps a session). Never in the shared logins.
+CREATE TABLE IF NOT EXISTS gh_guests (
+  id         TEXT PRIMARY KEY,         -- gh-g-xxxxxxxx
+  name       TEXT NOT NULL,
+  host       TEXT NOT NULL,            -- who invited them
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS gh_guests_host ON gh_guests (host);
+
+-- Invite links: one link, one guest, a week to use it
+CREATE TABLE IF NOT EXISTS gh_invites (
+  code       TEXT PRIMARY KEY,
+  host       TEXT NOT NULL,
+  bots       TEXT NOT NULL,            -- house players to seat too, comma-separated (may be empty)
+  settings   TEXT NOT NULL,            -- the house rules, JSON
+  created_at INTEGER NOT NULL,
+  used_by    TEXT,                     -- who joined
+  game_id    TEXT
+);

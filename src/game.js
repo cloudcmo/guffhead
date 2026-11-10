@@ -305,6 +305,7 @@ export async function league(env, who, circle) {
   for (const g of r.results) {
     const ps = g.players.split(",");
     if (ps.filter((p) => !isBot(p)).length < 2) continue;
+    if (ps.some((p) => p.startsWith("gh-g-"))) continue;      // a game with a guest counts nowhere
     if (!ps.some((p) => rows[p])) continue;
     if (current === null && g.loser && rows[g.loser]) current = g.loser;
     for (const p of ps) if (rows[p]) rows[p].played++;
@@ -402,6 +403,7 @@ export async function logbook(env, who, circle) {
   const r = await env.DB.prepare(`SELECT game_id, players, loser, practice, detail, finished_at FROM gh_results ORDER BY finished_at DESC LIMIT 600`).all();
   return r.results
     .map((x) => ({ id: x.game_id, players: x.players.split(","), loser: x.loser, practice: !!x.practice, finished: x.finished_at, order: (JSON.parse(x.detail || "{}").order || []) }))
+    .filter((x) => !x.players.some((p) => p.startsWith("gh-g-")))      // guest games are private to their players
     .filter((x) => x.players.some((p) => ids.has(p)) && x.players.every((p) => ids.has(p) || isBot(p)))
     .slice(0, 150);
 }
@@ -423,6 +425,55 @@ export async function goodNews(env, who) {
   const safe = g.filter((x) => x.loser !== who.id).length;
   if (safe) out.push(`😅 Got away with it ${safe} time${safe > 1 ? "s" : ""} out of ${g.length}`);
   return out;
+}
+
+/* ---------- invites: anyone can be asked to a hand, with a link (Words and Guff's guest games) ---------- */
+export const INVITE_DAYS = 7;
+const newCode = () => { const c = "abcdefghjkmnpqrstuvwxyz23456789"; const a = new Uint8Array(8); crypto.getRandomValues(a); return [...a].map((x) => c[x % c.length]).join(""); };
+
+export async function makeInvite(env, who, body) {
+  if (who.guest) no("Guests can't send invites. Ask whoever invited you.");
+  const bots = Array.isArray(body && body.players) ? [...new Set(body.players.map(String))].filter(isBot).slice(0, 2) : [];
+  const code = newCode();
+  await env.DB.prepare(`INSERT INTO gh_invites (code, host, bots, settings, created_at) VALUES (?, ?, ?, ?, ?)`)
+    .bind(code, who.id, bots.join(","), JSON.stringify(R.tidySettings(body && body.settings)), now()).run();
+  return { code, bots };
+}
+
+export async function inviteInfo(env, code, hostName) {
+  const inv = await env.DB.prepare(`SELECT code, host, bots, settings, created_at, used_by, game_id FROM gh_invites WHERE code = ?`).bind(code).first();
+  if (!inv) no("That invite link doesn't work. Ask for a new one.", 404);
+  const status = inv.used_by ? "used" : now() - inv.created_at > INVITE_DAYS * 86400000 ? "expired" : "open";
+  return { inv, status, out: { code, host: inv.host, hostName: await hostName(inv.host), bots: inv.bots ? inv.bots.split(",") : [], rules: R.describeRules(JSON.parse(inv.settings)), status } };
+}
+
+/**
+ * Someone opens the link and says their name (or is already logged in as a Guff player): a game with the host
+ * (and any house players the host asked for) starts at once. One link, one guest.
+ */
+export async function joinInvite(env, code, joiner, hostName) {
+  const { inv, status } = await inviteInfo(env, code, hostName);
+  if (status === "expired") no("That invite has run out (they last a week). Ask for a new one.");
+  if (status === "used") {
+    if (joiner && (joiner.id === inv.used_by || joiner.id === inv.host) && inv.game_id) return { game: inv.game_id, existing: true };
+    no("That invite's been used. Ask for a new one.");
+  }
+  if (!joiner) no("Who's playing?");
+  if (joiner.id === inv.host) no("That's your own invite. Send it to someone.");
+  const host = { id: inv.host, name: await hostName(inv.host) };
+  const bots = inv.bots ? inv.bots.split(",") : [];
+  const list = [{ id: joiner.id, name: joiner.name }, ...bots.map((b) => ({ id: b, name: BOTS[b].name }))];
+  const st = await createGame(env, host, { players: [joiner.id, ...bots], settings: JSON.parse(inv.settings) }, async () => list);
+  const claim = await env.DB.prepare(`UPDATE gh_invites SET used_by = ?, game_id = ? WHERE code = ? AND used_by IS NULL`).bind(joiner.id, st.id, code).run();
+  if (!(claim.meta && claim.meta.changes)) no("Someone else got there first. Ask for a new invite.");
+  return { game: st.id, st, existing: false };
+}
+
+export async function newGuest(env, name, host) {
+  const a = new Uint8Array(6); crypto.getRandomValues(a);
+  const id = `gh-g-${[...a].map((b) => b.toString(36)).join("").slice(0, 10)}`;
+  await env.DB.prepare(`INSERT INTO gh_guests (id, name, host, created_at) VALUES (?, ?, ?, ?)`).bind(id, name, host, now()).run();
+  return { id, name, guest: true, host };
 }
 
 /* ---------- the actions, with the database ---------- */
@@ -468,7 +519,7 @@ export async function getGame(env, who, id, opponentsOf = null) {
   const st = await load(env, id);
   if (st.players.includes(who.id)) return st;
   // a finished game can be watched (replay and all, never the chat) by anyone who plays someone at that table
-  if (st.status === "finished" && opponentsOf) {
+  if (st.status === "finished" && opponentsOf && !st.players.some((p) => p.startsWith("gh-g-"))) {
     const mine = new Set((await opponentsOf(env, who.id)).map((o) => o.id));
     if (st.players.some((p) => mine.has(p))) return st;
   }

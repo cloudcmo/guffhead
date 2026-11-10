@@ -28,10 +28,10 @@ with sync_playwright() as p:
         cards = pg.locator(".mine [data-card]:not(.dim)")
         if pg.locator("#playBtn").count() and cards.count():
             if i > 6 and not shot_table:
-                cards.first.click(); pg.wait_for_timeout(200)
+                cards.first.click(position={"x": 8, "y": 24}); pg.wait_for_timeout(200)
                 pg.screenshot(path=f"{OUT}/8-table.png"); shot_table = True
             else:
-                cards.first.click(); pg.wait_for_timeout(100)
+                cards.first.click(position={"x": 8, "y": 24}); pg.wait_for_timeout(100)
             if pg.locator("#playBtn:not([disabled])").count(): pg.click("#playBtn")
         elif pg.locator("#pickBtn").count():
             pg.click("#pickBtn")

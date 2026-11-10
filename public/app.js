@@ -197,8 +197,9 @@ function route() {
   nav(h);
   stopIdle();
   const nt = $("nexttoast"); if (nt) nt.remove();
-  if (!S.token) return renderLogin();
   let m;
+  if ((m = h.match(/^#\/join\/([a-z0-9]{8})/))) return renderJoin(m[1]);
+  if (!S.token) return renderLogin();
   if ((m = h.match(/^#\/game\/([a-z0-9]{6})/))) return openGame(m[1]);
   if ((m = h.match(/^#\/replay\/([a-z0-9]{6})/))) return renderReplay(m[1]);
   if (h === "#/record") return renderRecord();
@@ -218,7 +219,7 @@ function nav(h) {
     bn.hidden = !S.token || inGame;
     document.body.classList.toggle("tabs", !bn.hidden);
     const which = h === "#/" || h === "" || h === "#" ? "tables" : h.replace("#/", "");
-    bn.querySelectorAll("a").forEach((a) => a.classList.toggle("on", a.dataset.tab === which));
+    bn.querySelectorAll("a").forEach((a) => { a.classList.toggle("on", a.dataset.tab === which); if (a.dataset.tab === "league" || a.dataset.tab === "logbook") a.hidden = !!(S.me && S.me.guest); });
   }
   if (back) back.hidden = !S.token || !inGame;
   badge(waitingOnMe(S.games));
@@ -269,8 +270,9 @@ async function renderLobby() {
         <div class="landlord">${headOf("guffbot", 74)}</div>
         <p class="patter">"${esc(say("hello", seedOf(tonight() + S.me.id), { name: S.me.name }))}"</p>
       </div>
+      ${S.me.guest ? `<p class="card-panel guestnote">You're ${esc(S.me.hostName || "a friend")}'s guest at The Guff's Head. Want your own login for all the Guff games? Ask ${esc(S.me.hostName || "them")}.</p>` : ""}
       ${newsLine(r.news)}
-      ${leagueSnippet(r.league)}
+      ${S.me.guest ? "" : leagueSnippet(r.league)}
       <h2>Your tables</h2>
       <div class="tables">${playing.length ? playing.map(tableRow).join("") : `<p class="soft">No games on. Deal one below.</p>`}</div>
       ${done.length ? `<details class="done"><summary>Lately finished</summary>${done.map(tableRow).join("")}</details>` : ""}
@@ -280,7 +282,7 @@ async function renderLobby() {
         <p class="small">Pick one to three to play with. GuffBot and Ms GuffBot play the moment it's their go.</p>
         <div class="chips people">
           ${S.house.map((h) => `<button class="chip person${NEW.crew.includes(h.id) ? " on" : ""}" data-crew="${h.id}" title="${esc(h.blurb)}">${headOf(h.id, 28)}${esc(h.name)}</button>`).join("")}
-          ${S.opponents.map((o) => `<button class="chip person${NEW.crew.includes(o.id) ? " on" : ""}" data-crew="${esc(o.id)}">${headOf(o.id, 28)}${esc(o.name)}</button>`).join("")}
+          ${S.opponents.map((o) => `<button class="chip person${NEW.crew.includes(o.id) ? " on" : ""}" data-crew="${esc(o.id)}">${headOf(o.id, 28)}${esc(o.name)}${o.guest ? ` <small class="guesttag">guest</small>` : ""}</button>`).join("")}
         </div>
         <details class="rules"${store.get("gh:rulesOpen") ? " open" : ""}>
           <summary>House rules <span class="soft">${esc(rulesShort(R))}</span></summary>
@@ -303,6 +305,12 @@ async function renderLobby() {
         <button class="btn gold" id="deal" ${n >= 1 && n <= MAX_PLAYERS - 1 ? "" : "disabled"}>${n < 1 ? "Pick who you're playing" : n > MAX_PLAYERS - 1 ? "Three at most with you" : `Deal for ${n + 1}`}</button>
       </div>
 
+      ${S.me.guest ? "" : `<h2>Invite anyone</h2>
+      <div class="card-panel invite">
+        <p class="small">Send a link to anyone, by WhatsApp or text. They type their name and they're straight into a game with you: no login, no PIN. ${NEW.crew.filter(isHouse).length ? `${esc(NEW.crew.filter(isHouse).map(nameOf).join(" and "))} will play too.` : "Pick GuffBot or Ms GuffBot above to seat them too."} Same house rules as above. Guest games don't count in the 💩 league.</p>
+        <button class="btn gold" id="invite">📨 Make an invite link</button>
+        <div id="inviteOut"></div>
+      </div>`}
       ${notifyCard()}
       <details class="howto"><summary>How to play</summary>${howTo(R)}</details>
       <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a> · <button class="linkish" id="logout">Go home</button><br><small class="soft">Version ${esc(BUILD)}</small></p>
@@ -319,6 +327,7 @@ async function renderLobby() {
   if (rd) rd.ontoggle = () => store.set("gh:rulesOpen", rd.open);
   $("rulesReset").onclick = () => { NEW.rules = { ...DEFAULTS }; store.set("gh:rules", NEW.rules); renderLobby(); };
   $("deal").onclick = () => start({ players: NEW.crew, settings: NEW.rules });
+  if ($("invite")) $("invite").onclick = () => makeInvite();
   $("logout").onclick = async () => { try { await api("/logout", { method: "POST" }); } catch {} logout(); };
   app.querySelectorAll("[data-nudge]").forEach((b) => (b.onclick = async (e) => {
     e.preventDefault(); e.stopPropagation();
@@ -400,6 +409,54 @@ function tableRow(g) {
 }
 
 function ago(t) { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; }
+
+/** An invite link anyone can use, sent with the phone's Share sheet (or copied). */
+async function makeInvite() {
+  try {
+    const r = await api("/invites", { method: "POST", body: { players: NEW.crew.filter(isHouse), settings: NEW.rules } });
+    r.url = `${location.origin}/#/join/${r.code}`;
+    const text = `Fancy a hand of Guffhead with me? It's the card game with the rude name, at The Guff's Head. Tap to join, no login needed:`;
+    $("inviteOut").innerHTML = `<p class="linkbox"><span>${esc(r.url)}</span></p><div class="row2"><button class="btn small gold" id="invShare">📣 Share it</button><button class="btn small ghost" id="invCopy">Copy link</button></div><p class="small soft">Works once, for one person, for a week. When they join, the game turns up in your tables.</p>`;
+    $("invCopy").onclick = async () => { try { await navigator.clipboard.writeText(`${text} ${r.url}`); toast("Copied. Paste it into a message."); } catch { toast(r.url, 6000); } };
+    $("invShare").onclick = async () => { try { if (navigator.share) await navigator.share({ text, url: r.url }); else { await navigator.clipboard.writeText(`${text} ${r.url}`); toast("Copied. Paste it into a message."); } } catch {} };
+    if (navigator.share) { try { await navigator.share({ text, url: r.url }); } catch {} }
+  } catch (e) { toast(e.message); }
+}
+
+/* ---------- the join page: someone's opened an invite link ---------- */
+async function renderJoin(code) {
+  $("app").innerHTML = `<p class="loading">Finding your seat…</p>`;
+  let inv;
+  try { inv = (await api(`/invites/${code}`)).invite; } catch (e) { $("app").innerHTML = `<section class="door"><p class="patter">${esc(e.message)}</p><p class="foot"><a href="#/">The Guff's Head</a></p></section>`; return; }
+  const others = inv.bots.map((b) => (b === "guffbot" ? "GuffBot" : "Ms GuffBot"));
+  const mine = S.token && S.me;
+  const isHost = mine && S.me.id === inv.host;
+  let action;
+  if (inv.status === "expired") action = `<p class="patter">This invite has run out (they last a week). Ask ${esc(inv.hostName)} for a new one.</p>`;
+  else if (inv.status === "used" && !mine) action = `<p class="patter">This invite's been used. Ask ${esc(inv.hostName)} for a new one.</p>`;
+  else if (isHost && inv.status === "open") action = `<p class="patter">This is your own invite link. Send it to someone: whoever opens it first gets the seat.</p><p class="foot"><a href="#/">Back to your tables</a></p>`;
+  else if (mine) action = `<button class="btn gold big" id="joinMe">${inv.status === "used" ? "To the game ▸" : `Pull up a stool as ${esc(S.me.name)}`}</button>`;
+  else action = `<form id="joinForm" class="card-panel form"><label>What's your name? <input id="gname" maxlength="20" autocomplete="given-name" autocapitalize="words" required placeholder="First name"></label><button class="btn gold" type="submit">Pull up a stool</button><p class="err" id="joinErr" hidden></p></form>`;
+  $("app").innerHTML = `
+    <section class="door join">
+      <div class="doorman">${window.Jumper ? window.Jumper.svg(seedOf(code), 150) : headOf("guffbot", 110)}</div>
+      <p class="patter"><b>${esc(inv.hostName)}</b> has saved you a seat in the back room for a hand of Guffhead${others.length ? `, with ${esc(others.join(" and "))}` : ""}.</p>
+      ${action}
+      <details class="howto"><summary>How to play</summary>
+        <p>Everyone gets three cards face down, three face up and three in hand. Play a card at least as high as the top of the pile, or pick the whole pile up. Get rid of all your cards. The last one holding cards is the Guffhead, and wears the 💩 until someone else loses.</p>
+        <ul class="rulelist">${inv.rules.map(([k, v]) => `<li><b>${esc(k)}</b> ${esc(v)}</li>`).join("")}</ul>
+        <p>It's played at your own pace: take your go whenever you like, and come back to this link on this phone to carry on.</p>
+      </details>
+    </section>`;
+  const go = async (name) => {
+    const r = await api(`/invites/${code}/join`, { method: "POST", body: { name } });
+    if (r.token) { S.token = r.token; S.me = r.me; store.set("gh:token", r.token); store.set("gh:me", r.me); }
+    shuffleSound();
+    location.hash = `#/game/${r.game}`;
+  };
+  if ($("joinMe")) $("joinMe").onclick = () => go().catch((e) => toast(e.message));
+  if ($("joinForm")) $("joinForm").onsubmit = (e) => { e.preventDefault(); go($("gname").value).catch((er) => { const x = $("joinErr"); x.textContent = er.message; x.hidden = false; }); };
+}
 
 async function start(body) {
   try {
@@ -547,26 +604,52 @@ async function doAct(body) {
 
 /** A new view of the game: catch up on what happened since `since`, then draw it. */
 function show(G, since, mine = false) {
+  // the pile as this phone last showed it, so the catch-up can replay it card by card
+  const prevPile = S.G && S.G.id === G.id ? S.G.g.pile.slice() : null;
   S.G = G;
   if (location.hash !== `#/game/${G.id}`) return;
   // what to replay: everything after `since`, except the moves I made myself just now (I saw myself make them)
-  const fresh = S.evs.filter((e) => e.seq > since && !(mine && e.p === S.me.id && !e.auto && !e.autopilot && e.k !== "out" && e.k !== "over"));
+  const all = S.evs.filter((e) => e.seq > since);
+  const fresh = all.filter((e) => !(mine && e.p === S.me.id && !e.auto && !e.autopilot && e.k !== "out" && e.k !== "over"));
   const toPlay = fresh.filter((e) => weight(e) !== "small");
   store.set(seenKey(G.id), G.g.seq);
   if (!toPlay.length || reduced()) { renderGame(); return; }
-  catchUp(toPlay, since > 0 && !mine && toPlay.length > 2);
+  catchUp(toPlay, since > 0 && !mine && toPlay.length > 2, prevPile ? { all, pile: prevPile } : null);
 }
 
 /* ---------- the catch-up: what happened while you were away (or just now, live) ----------
    It plays over the table, so nothing below moves while you're about to tap (the usability review). Tap it to
    jump to the next go; Skip ends it. A long queue goes faster. */
-async function catchUp(evs, away) {
+async function catchUp(evs, away, track = null) {
   S.playing = true; S.skip = false;
   renderGame(true);
   const stage = $("stage");
   if (!stage) { S.playing = false; return; }
   const names = namesFor(S.G);
-  const per = evs.length > 8 ? 480 : evs.length > 4 ? 700 : 900;
+  // slow enough to follow (Carl, 10 Nov 2026: against the house it went too fast); a long queue still speeds up
+  const per = evs.length > 10 ? 650 : evs.length > 5 ? 1000 : 1300;
+  // with the pile as it was, each play lands on the real pile, burns burn it and pick-ups clear it
+  let pile = track ? track.pile.slice() : null;
+  S.stagePile = !!track;
+  stage.classList.toggle("strip", !!track);
+  const showPile = (cls) => {
+    if (!pile) return;
+    const el = $("pile");
+    if (el) el.innerHTML = `${pileHtml({ pile }, S.G.settings)}<small>${pile.length ? `${pile.length} on the pile` : "Empty"}</small>`;
+    if (cls && el) { const f = el.querySelector(".fan"); if (f) f.classList.add(cls); }
+    const nd = document.querySelector(".table .need");
+    if (nd) { nd.textContent = needWords(pile, S.G.settings); nd.className = `need${needClass({ pile }, S.G.settings)}`; }
+  };
+  const apply = (e) => {
+    if (!pile) return null;
+    if (e.k === "play") { pile.push(...e.cards); if (e.burn) return "burn"; }
+    else if (e.k === "flip" && !e.ok) pile.push(e.card);
+    else if (e.k === "pickup") return "pickup";
+    return null;
+  };
+  showPile();
+  const shown = new Set(evs.map((e) => e.seq));
+  const queue = track ? track.all : evs;
   stage.hidden = false;
   stage.innerHTML = `<div class="stagehead">${away ? "While you were away" : ""}<span class="stagecount" id="stagecount"></span><button class="linkish" id="skip">Skip ▸▸</button></div><div class="stagebody" id="stagebody"></div>`;
   $("skip").onclick = (e) => { e.stopPropagation(); S.skip = true; if (S.wake) S.wake(); };
@@ -582,8 +665,10 @@ async function catchUp(evs, away) {
     }
   }
   let i = 0;
-  for (const e of evs) {
+  for (const e of queue) {
     if (S.skip || !S.G) break;
+    const after = apply(e);
+    if (!shown.has(e.seq)) { if (after) { pile = []; } showPile(); continue; }   // my own move: already seen, just keep the pile right
     const body = $("stagebody");
     if (!body) break;
     i++;
@@ -591,11 +676,15 @@ async function catchUp(evs, away) {
     const big = weight(e) === "big";
     body.innerHTML = stageCard(e, names);
     body.firstElementChild.classList.add(big ? "pop" : "slide");
+    showPile();
     if (e.k === "play" && e.burn) { whoosh(); buzz([40, 30, 40]); body.querySelector(".stagecards") && body.querySelector(".stagecards").classList.add("burning"); }
     else if (e.k === "play" || e.k === "flip") snap(e.cards ? e.cards.length : 1);
     if (e.k === "over") buzz([80, 40, 120]);
-    await wait(big ? per * 1.6 : per);
+    if (after === "burn") { showPile("burning"); await wait(per * 0.9); pile = []; showPile(); await wait(per * 0.8); continue; }
+    if (after === "pickup") { showPile("scooped"); await wait(per * 0.7); pile = []; showPile(); await wait(per * 0.8); continue; }
+    await wait(big ? per * 1.5 : per);
   }
+  S.stagePile = false;
   S.playing = false; S.wake = null;
   if (S.G) renderGame();
 }
@@ -613,9 +702,9 @@ function poseFor(e) {
 function stageCard(e, names) {
   const who = e.p ? `<span class="stagewho">${headOf(e.p, 34)}</span>` : "";
   let cards = "";
-  if (e.k === "play") cards = e.cards.map((c) => card(c, { size: "md", s: S.G.settings })).join("");
-  if (e.k === "flip") cards = card(e.card, { size: "md", cls: e.ok ? "" : "nogo", s: S.G.settings });
-  if (e.k === "pickup") cards = `<span class="pickfan">${Array.from({ length: Math.min(e.n, 7) }, (_, i) => `<span style="--i:${i}">${back({ size: "sm" })}</span>`).join("")}</span>`;
+  if (e.k === "play") cards = S.stagePile ? "" : e.cards.map((c) => card(c, { size: "md", s: S.G.settings })).join("");
+  if (e.k === "flip") cards = card(e.card, { size: S.stagePile ? "sm" : "md", cls: e.ok ? "" : "nogo", s: S.G.settings });
+  if (e.k === "pickup") cards = S.stagePile ? "" : `<span class="pickfan">${Array.from({ length: Math.min(e.n, 7) }, (_, i) => `<span style="--i:${i}">${back({ size: "sm" })}</span>`).join("")}</span>`;
   if (e.k === "over") cards = e.loser ? headOf(e.loser, 56, true, true) : "";
   const tag = e.autopilot ? `<small class="tag">GuffBot played this for ${esc(names[e.p] === "You" ? "you" : names[e.p])}</small>` : e.auto ? `<small class="tag">no choice, played for ${esc(names[e.p] === "You" ? "you" : names[e.p])}</small>` : "";
   const talk = S.talk ? comment(e, names, S.me.id) : null;
@@ -649,9 +738,8 @@ function renderGame(staging = false) {
   const keep = window.scrollY;
   app.innerHTML = `
     <section class="game${staging ? " staging" : ""}">
-      <div class="status">${statusLine(G)}</div>
+      ${G.status === "playing" && g.phase === "play" ? "" : `<div class="status">${statusLine(G)}</div>`}
       <div id="presence">${presenceHtml()}</div>
-      ${raceStrip(G)}
       <div class="opps n${opps.length}">${opps.map((p) => oppPod(G, p, turnId, nextId)).join("")}</div>
       <div class="table" id="table">
         <div class="pack">${g.draw ? `<span class="stack">${back({ size: "sm" })}${g.draw > 1 ? back({ size: "sm", cls: "under" }) : ""}</span><small>Pack ${g.draw}</small>` : `<span class="stack empty"></span><small>Pack gone</small>`}</div>
@@ -709,11 +797,14 @@ function fitHand() {
   const h = $("hand");
   if (!h) return;
   const cards = h.querySelectorAll(".card");
+  h.classList.remove("two");
   if (cards.length < 2) return;
   const w = cards[0].getBoundingClientRect().width;
   const room = h.clientWidth - 4;
-  const need = cards.length * w + (cards.length - 1) * 6;
-  const ov = need <= room ? 6 : Math.max(-w * 0.72, (room - cards.length * w) / (cards.length - 1));
+  const fit = (n) => (n * w + (n - 1) * 6 <= room ? 6 : (room - n * w) / (n - 1));
+  let ov = fit(cards.length);
+  // never cover more than half a card (it must stay readable and tappable): a really big hand goes onto two rows
+  if (ov < -w * 0.5) { h.classList.add("two"); ov = Math.max(-w * 0.5, fit(Math.ceil(cards.length / 2))); }
   h.style.setProperty("--ov", `${ov}px`);
 }
 window.addEventListener("resize", () => fitHand());
@@ -750,7 +841,7 @@ function oppPod(G, p, turnId, nextId) {
   const hand = typeof p.hand === "number" ? p.hand : p.hand.length;
   const here = S.here.includes(p.id);
   const busy = S.doing[p.id];
-  const status = !p.out && here ? `<small class="podstatus">${busy === "picking" && p.id === turnId ? "picking cards…" : "looking 👀"}</small>` : !p.out && p.id === nextId ? `<small class="podstatus next">Next</small>` : "";
+  const status = p.out ? "" : p.id === turnId ? `<small class="podstatus go">${here && busy === "picking" ? "Their go: picking cards…" : here ? "Their go 👀" : "Their go"}</small>` : here ? `<small class="podstatus">looking 👀</small>` : p.id === nextId ? `<small class="podstatus next">Next</small>` : "";
   const turn = p.id === turnId;
   const known = (p.known || []).slice();
   const out = p.out ? `<span class="outbadge">${p.out === 1 ? "Out first" : "Out"}</span>` : "";
@@ -760,7 +851,7 @@ function oppPod(G, p, turnId, nextId) {
       <span class="handcount" title="Cards in hand">${hand ? `<span class="minifan">${Array.from({ length: Math.min(hand, 5) }, (_, i) => `<span style="--i:${i}">${back({ size: "xs" })}</span>`).join("")}</span><b>${hand}</b>` : `<b class="none">0</b>`}</span>
       <span class="tablecards">${tableStack(p, "op", G.settings)}</span>
     </div>
-    ${known.length ? `<div class="known" title="Cards everyone saw them pick up">Picked up: ${sortCards(known, G.settings).slice(0, 8).map((c) => `<span class="kc${c[1] === "H" || c[1] === "D" ? " red" : ""}">${RANK[c[0]] || c[0]}${SUIT[c[1]]}</span>`).join("")}${known.length > 8 ? ` +${known.length - 8}` : ""}</div>` : ""}
+    ${known.length ? `<div class="known" title="Cards everyone saw them pick up"><span class="kl">Picked up</span>${sortCards(known, G.settings).slice(-5).reverse().map((c) => `<span class="kc${c[1] === "H" || c[1] === "D" ? " red" : ""}">${RANK[c[0]] || c[0]}${SUIT[c[1]]}</span>`).join("")}${known.length > 5 ? `<span class="kmore">+${known.length - 5}</span>` : ""}</div>` : ""}
   </div>`;
 }
 /** Face-down cards with the face-up ones sitting on them. */
@@ -787,7 +878,7 @@ function myArea(G, me, turnId) {
   const prepick = G.status === "playing" && G.g.phase === "play" && !me.out && !G.myGo && zone === "hand";
   if (myGo) S.sel = S.sel.filter((c) => playable.has(c));
   return `<div class="mine${me.id === turnId ? " turn" : ""}${me.out ? " isout" : ""}">
-    <div class="myhead">${headOf(me.id, 34, wears(G, me.id), S.drop && wears(G, me.id))}<b>You</b>${me.out ? `<span class="outbadge">${me.out === 1 ? "Out first" : "Out"}</span>` : ""}${wears(G, me.id) && G.status === "playing" ? `<small class="soft">💩 from last time</small>` : ""}</div>
+    <div class="myhead">${headOf(me.id, 34, wears(G, me.id), S.drop && wears(G, me.id))}<b>You</b>${G.status === "playing" && G.g.phase === "play" && !me.out ? (G.myGo && !S.playing ? `<span class="yourgo">Your go</span>` : G.myGo ? "" : `<small class="waitfor">Waiting for ${esc(G.required.map((x) => nameOf(x)).join(" and "))}</small>`) : ""}${me.out ? `<span class="outbadge">${me.out === 1 ? "Out first" : "Out"}</span>` : ""}${wears(G, me.id) && G.status === "playing" ? `<small class="soft">💩 from last time</small>` : ""}</div>
     <div class="mytable">${tableStack(me, "sm", s, { tapUp: myGo && zone === "up", tapDown: myGo && zone === "down" })}</div>
     ${prepick && S.sel.length ? `<p class="prepicked">Picked for your go. It'll be played only if it still goes, and only when you tap Play.</p>` : ""}
     <div class="hand" id="hand">${hand.length ? hand.map((c) => card(c, { size: "md", tap: myGo || prepick, sel: S.sel.includes(c), dim: myGo && !playable.has(c), s })).join("") : me.out ? `<p class="soft">You're out. ${G.status === "playing" ? "Sit back and enjoy the show." : ""}</p>` : `<p class="soft small">${zone === "up" ? "Hand's empty: play from your face-up cards." : zone === "down" ? "Blind now: tap a face-down card." : ""}</p>`}</div>
@@ -854,6 +945,7 @@ function finalCard(G) {
       <div class="row2"><a class="btn ghost" href="#/replay/${G.id}">📼 Watch the replay</a>${G.watching ? "" : `<button class="btn ghost" id="shareGame">📣 Share</button>`}</div>
     </div>
     <p class="small soft">${human.length > 1 ? (G.reigning && G.reigning !== G.loser ? `The 💩 passes from ${esc(names[G.reigning])} to ${esc(names[G.loser])}.` : G.reigning === G.loser ? `${esc(names[G.loser])} keeps the 💩. Again.` : `${esc(names[G.loser])} wears the 💩 until someone else loses.`) : "Practice against the house: it's in your record, not the league."}</p>
+    ${S.me.guest ? `<p class="guestnote">Enjoyed that? ${esc(S.me.hostName || "Your host")} can deal you another, or ask them for your own login to all the Guff games.</p>` : ""}
     ${crackerHtml(G)}
   </div>`;
 }

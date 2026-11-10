@@ -19,12 +19,15 @@
  *   GET  /api/logbook              finished games between people in my circle
  *   POST /api/games/:id/nudge      a tap on the shoulder for whoever's keeping us waiting (after 2 hours)
  *   GET  /api/push/key, POST /api/push/subscribe, /api/push/unsubscribe, /api/push/test
+ *   POST /api/invites              { players: [bots], settings } -> { code, url }: a link anyone can use to play you
+ *   GET  /api/invites/:code        (no login) who's asking, the house rules, open | used | expired
+ *   POST /api/invites/:code/join   { name } (no login: a guest is made) or logged in -> { token?, me?, game }
  *   GET  /api/health
  *
  * The cron (wrangler.toml) runs the idle timer: GuffBot plays the go of anyone who's left it too long.
  */
 
-import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, sweep, nudge, doing, doingAt, logbook, goodNews, Refusal } from "./game.js";
+import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, sweep, nudge, doing, doingAt, logbook, goodNews, makeInvite, inviteInfo, joinInvite, newGuest, Refusal } from "./game.js";
 import { BOTS } from "../public/bot.js";
 import { DEFAULTS } from "../public/rules.js";
 import { sha256, randomToken, findPlayer, opponentsOf, looksFor } from "./people.js";
@@ -43,8 +46,9 @@ async function me(request, env) {
   const s = await env.DB.prepare(`SELECT player_id FROM gh_sessions WHERE token = ?`).bind(t).first();
   if (!s) return null;
   const p = await findPlayer(env, s.player_id);
-  return p ? { id: p.id, name: p.name, isAdmin: p.isAdmin, token: t } : null;
+  return p ? { id: p.id, name: p.name, isAdmin: p.isAdmin, guest: !!p.guest, host: p.host || null, token: t } : null;
 }
+const hostNameOf = (env) => async (id) => { const p = await findPlayer(env, id); return p ? p.name : id; };
 
 async function login(request, env) {
   const b = await body(request);
@@ -99,6 +103,28 @@ async function api(request, env, ctx, path, url) {
   if (path === "/api/health") return json({ ok: true, build: BUILD, note: BUILD_NOTE, push: pushConfigured(env) });
   if (path === "/api/login" && m === "POST") return login(request, env);
 
+  // invites work without a login: whoever opens the link is asked their name
+  let mi = path.match(/^\/api\/invites\/([a-z0-9]{8})$/);
+  if (mi && m === "GET") { const { out } = await inviteInfo(env, mi[1], hostNameOf(env)); return json({ invite: out }); }
+  mi = path.match(/^\/api\/invites\/([a-z0-9]{8})\/join$/);
+  if (mi && m === "POST") {
+    let joiner = await me(request, env);
+    let token = null;
+    if (!joiner) {
+      const b = (await body(request)) || {};
+      const name = String(b.name || "").replace(/\s+/g, " ").trim();
+      if (!/^[\p{L}][\p{L} '\-]{0,18}[\p{L}]$/u.test(name)) return err("Just your first name, please (2 to 20 letters)");
+      const { inv, status } = await inviteInfo(env, mi[1], hostNameOf(env));
+      if (status !== "open") return err(status === "used" ? "That invite's been used. Ask for a new one." : "That invite has run out (they last a week). Ask for a new one.");
+      joiner = await newGuest(env, name, inv.host);
+      token = randomToken();
+      await env.DB.prepare(`INSERT INTO gh_sessions (token, player_id, created_at) VALUES (?, ?, ?)`).bind(token, joiner.id, Date.now()).run();
+    }
+    const r = await joinInvite(env, mi[1], joiner, hostNameOf(env));
+    if (r.st) later(ctx, notify(env, r.st, { status: "playing", required: [joiner.id] }));
+    return json({ game: r.game, token, me: token ? { id: joiner.id, name: joiner.name, guest: true, host: joiner.host, hostName: await hostNameOf(env)(joiner.host) } : undefined });
+  }
+
   const who = await me(request, env);
   if (!who) return err("Please log in", 401);
 
@@ -112,7 +138,7 @@ async function api(request, env, ctx, path, url) {
     const ids = [who.id, ...opponents.map((o) => o.id), ...games.flatMap((g) => g.players)];
     const lg = await league(env, who, opponents);
     const news = await goodNews(env, who).catch(() => []);
-    return json({ league: lg, news, me: { id: who.id, name: who.name, isAdmin: who.isAdmin }, opponents, house: HOUSE, games, looks: await looksFor(env, ids), defaults: DEFAULTS, push: pushConfigured(env), build: BUILD, note: BUILD_NOTE });
+    return json({ league: lg, news, me: { id: who.id, name: who.name, isAdmin: who.isAdmin, guest: who.guest, host: who.host, hostName: who.host ? await hostNameOf(env)(who.host) : null }, opponents, house: HOUSE, games, looks: await looksFor(env, ids), defaults: DEFAULTS, push: pushConfigured(env), build: BUILD, note: BUILD_NOTE });
   }
   if (path === "/api/games" && m === "GET") return json({ build: BUILD, games: await listGames(env, who) });
   if (path === "/api/games" && m === "POST") {
@@ -121,6 +147,10 @@ async function api(request, env, ctx, path, url) {
     return json({ game: viewFor(st, who.id) });
   }
   if (path === "/api/record" && m === "GET") return json({ record: await record(env, who) });
+  if (path === "/api/invites" && m === "POST") {
+    const r = await makeInvite(env, who, await body(request));
+    return json({ ...r, url: `${url.origin}/#/join/${r.code}` });
+  }
   if (path === "/api/logbook" && m === "GET") {
     const circle = await opponentsOf(env, who.id);
     const games = await logbook(env, who, circle);

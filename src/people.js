@@ -20,15 +20,21 @@ export async function findPlayer(env, id) {
     const c = await env.DB.prepare(`SELECT id, name, pin_hash FROM cg_players WHERE id = ?`).bind(id).first();
     if (c) return { id: c.id, name: c.name, pin_hash: c.pin_hash, isAdmin: false };
   } catch { /* no CountGuff tables (a fresh local database) */ }
+  // a guest someone invited with a link (Guffhead's own table: guests never touch the shared logins)
+  if (isGuestId(id)) {
+    const g = await env.DB.prepare(`SELECT id, name, host FROM gh_guests WHERE id = ?`).bind(id).first();
+    if (g) return { id: g.id, name: g.name, pin_hash: null, isAdmin: false, guest: true, host: g.host };
+  }
   return null;
 }
+export const isGuestId = (id) => /^gh-g-[a-z0-9]+$/.test(String(id || ""));
 
 async function namesFor(env, ids) {
   const uniq = [...new Set(ids)].filter(Boolean);
   const out = Object.fromEntries(uniq.map((id) => [id, id]));
   if (!uniq.length) return out;
   const q = uniq.map(() => "?").join(",");
-  for (const table of ["players", "cg_players"]) {
+  for (const table of ["players", "cg_players", "gh_guests"]) {
     try {
       const r = await env.DB.prepare(`SELECT id, name FROM ${table} WHERE id IN (${q})`).bind(...uniq).all();
       for (const p of r.results) out[p.id] = p.name;
@@ -37,8 +43,17 @@ async function namesFor(env, ids) {
   return out;
 }
 
-/** Everyone a player may start a game with, as in CountGuff: league-mates in Words and Guff, plus CountGuff's links. */
+/**
+ * Everyone a player may start a game with, as in CountGuff: league-mates in Words and Guff, plus CountGuff's links,
+ * plus (Guffhead only) the guests you've invited in the last 60 days. A guest's list is just whoever invited them.
+ */
 export async function opponentsOf(env, pid) {
+  if (isGuestId(pid)) {
+    const g = await env.DB.prepare(`SELECT host FROM gh_guests WHERE id = ?`).bind(pid).first();
+    if (!g) return [];
+    const names = await namesFor(env, [g.host]);
+    return [{ id: g.host, name: names[g.host] }];
+  }
   const ids = new Set();
   const league = await env.DB.prepare(
     `SELECT DISTINCT p.id FROM memberships m1
@@ -53,7 +68,12 @@ export async function opponentsOf(env, pid) {
   } catch {}
   ids.delete(pid);
   const names = await namesFor(env, [...ids]);
-  return [...ids].map((id) => ({ id, name: names[id] })).sort((x, y) => x.name.localeCompare(y.name));
+  const out = [...ids].map((id) => ({ id, name: names[id] })).sort((x, y) => x.name.localeCompare(y.name));
+  try {
+    const gs = await env.DB.prepare(`SELECT id, name FROM gh_guests WHERE host = ? AND created_at > ? ORDER BY created_at DESC LIMIT 12`).bind(pid, Date.now() - 60 * 86400000).all();
+    for (const g of gs.results) out.push({ id: g.id, name: g.name, guest: true });
+  } catch {}
+  return out;
 }
 
 /** The faces everyone chose in CountGuff (cg_avatars): { id: look }. Anyone without one gets their starter or a seeded face. */
