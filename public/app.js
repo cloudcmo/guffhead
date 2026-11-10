@@ -381,7 +381,10 @@ async function openGame(id, quiet) {
   S.evs = r.game.g.events.slice();
   S.here = r.here || [];
   S.chat = r.chat || []; S.chatId = S.chat.length ? S.chat[S.chat.length - 1].id : 0;
-  const last = Number(store.get(seenKey(id)) || 0);
+  // catch up from whichever is later: what this phone last saw, or your own last move (so a new phone, or a
+  // different one, doesn't replay the whole game); never more than the last 20 goes
+  const mineAt = [...S.evs].reverse().find((e) => e.p === S.me.id && !e.auto && !e.autopilot && ["play", "pickup", "flip", "ready"].includes(e.k));
+  const last = Math.max(Number(store.get(seenKey(id)) || 0), mineAt ? mineAt.seq : 0, r.game.g.seq - 20);
   show(r.game, last);
   schedulePoll();
 }
@@ -525,6 +528,35 @@ function renderGame(staging = false) {
     </section>`;
   wireGame();
   renderChat();
+  fitHand();
+  if (!staging) bringMyGoIntoView(G);
+}
+/** A big hand overlaps like a fanned hand in real life, so it stays on one row (and never runs off the page). */
+function fitHand() {
+  const h = $("hand");
+  if (!h) return;
+  const cards = h.querySelectorAll(".card");
+  if (cards.length < 2) return;
+  const w = cards[0].getBoundingClientRect().width;
+  const room = h.clientWidth - 4;
+  const need = cards.length * w + (cards.length - 1) * 6;
+  const ov = need <= room ? 6 : Math.max(-w * 0.72, (room - cards.length * w) / (cards.length - 1));
+  h.style.setProperty("--ov", `${ov}px`);
+}
+window.addEventListener("resize", () => fitHand());
+/** When it becomes your go, scroll so your cards and the Play button are on screen (once per go, never mid-chat). */
+function bringMyGoIntoView(G) {
+  if (!G.myGo || G.status !== "playing") return;
+  const key = `${G.id}:${G.g.seq}`;
+  if (S.goSeen === key) return;
+  S.goSeen = key;
+  const a = document.activeElement;
+  if (a && (a.id === "chatText" || a.tagName === "SELECT")) return;
+  const target = $("actions") && $("actions").children.length ? $("actions") : document.querySelector(".mine");
+  if (!target) return;
+  const r = target.getBoundingClientRect();
+  if (r.bottom <= window.innerHeight - 8 && r.top >= 0) return;
+  target.scrollIntoView({ block: "end", behavior: reduced() ? "auto" : "smooth" });
 }
 /** Seats from my point of view: the player after me first, so the table reads in the direction of play. */
 function rotate(seats, me) {
@@ -577,9 +609,9 @@ function myArea(G, me, turnId) {
   const playable = new Set(myGo && G.options ? G.options.plays.flatMap((p) => p.cards) : []);
   const hand = Array.isArray(me.hand) ? me.hand : [];
   return `<div class="mine${me.id === turnId ? " turn" : ""}${me.out ? " isout" : ""}">
-    <div class="myhead">${headOf(me.id, 34, wears(G, me.id), S.drop && wears(G, me.id))}<b>You</b>${me.out ? `<span class="outbadge">${me.out === 1 ? "Out first" : "Out"}</span>` : ""}${wears(G, me.id) && G.status === "playing" ? `<small class="soft">You're wearing it from last time. Lose this one and it stays.</small>` : ""}</div>
+    <div class="myhead">${headOf(me.id, 34, wears(G, me.id), S.drop && wears(G, me.id))}<b>You</b>${me.out ? `<span class="outbadge">${me.out === 1 ? "Out first" : "Out"}</span>` : ""}${wears(G, me.id) && G.status === "playing" ? `<small class="soft">💩 from last time</small>` : ""}</div>
     <div class="mytable">${tableStack(me, "sm", s, { tapUp: myGo && zone === "up", tapDown: myGo && zone === "down" })}</div>
-    <div class="hand${hand.length > 8 ? " tight" : ""}${hand.length > 14 ? " tighter" : ""}">${hand.length ? hand.map((c) => card(c, { size: "md", tap: myGo, sel: S.sel.includes(c), dim: myGo && !playable.has(c), s })).join("") : me.out ? `<p class="soft">You're out. ${G.status === "playing" ? "Sit back and enjoy the show." : ""}</p>` : `<p class="soft small">${zone === "up" ? "Hand's empty: play from your face-up cards." : zone === "down" ? "Blind now: tap a face-down card." : ""}</p>`}</div>
+    <div class="hand" id="hand">${hand.length ? hand.map((c) => card(c, { size: "md", tap: myGo, sel: S.sel.includes(c), dim: myGo && !playable.has(c), s })).join("") : me.out ? `<p class="soft">You're out. ${G.status === "playing" ? "Sit back and enjoy the show." : ""}</p>` : `<p class="soft small">${zone === "up" ? "Hand's empty: play from your face-up cards." : zone === "down" ? "Blind now: tap a face-down card." : ""}</p>`}</div>
   </div>`;
 }
 
