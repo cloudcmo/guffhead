@@ -26,7 +26,7 @@ crons = ["*/15 * * * *"]
 # Notifications. The public key is written here by `node tools/vapid.mjs`; the private key is a secret:
 #   npx wrangler secret put VAPID_PRIVATE_KEY < .vapid-private && rm .vapid-private
 [vars]
-VAPID_PUBLIC_KEY = ""
+VAPID_PUBLIC_KEY = "BMnKXfXkcY1ucPoOUkiCk2LmD_GFvoST9jz6YAQHQCYtAxHX4gSPJg9dk-Vn1zmP6vEitt7Kz4eiSrWDAUltdWg"
 VAPID_SUBJECT = "mailto:carl@mesnerlyons.com"
 
 [observability]
