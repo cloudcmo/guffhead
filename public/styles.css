@@ -621,7 +621,7 @@ body.tabs .nexttoast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 html:has(body.fit), body.fit { overscroll-behavior: none; }
 body.fit .app { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
 body.fit .top { padding-top: calc(4px + env(safe-area-inset-top)); padding-bottom: 2px; }
-.game.fit { display: flex; flex-direction: column; height: calc(100dvh - 46px - 70px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+.game.fit { display: flex; flex-direction: column; height: calc(100dvh - var(--toph, 46px) - 70px - env(safe-area-inset-bottom)); }
 .game.fit .table { flex: 1 1 0; margin: 6px 0; min-height: 150px; max-height: 260px; }
 .game.fit .actions { margin: 6px 0; }
 .game.fit .hint { margin: 0 0 6px; padding: 5px 10px; font-size: .88rem; }
@@ -679,3 +679,16 @@ body.fit .sign { padding-top: 3px; padding-bottom: 3px; }
 .turnbar .tb-throw button { padding: 1px 5px; font-size: .95rem; }
 .turnbar.catching > .tb-main, .turnbar.catching > small { grid-column: 1 / -1; }
 .gamebar button .count { animation: pop .45s cubic-bezier(.2, 1.6, .4, 1); }
+
+/* the pile grows with the table (Carl, 11 Nov 2026: "That deck in the middle is tiny"): on a live game everything on
+   the table is sized from the table's own height and width, so a tall phone gets big cards */
+.game.fit .table { max-height: none; }
+.game.fit .table > * { --pw: clamp(44px, min(38cqh, 26cqw), 120px); }
+.game.fit .pile .fan { width: calc(var(--pw) * 1.6 + 16px); height: calc(var(--pw) * 1.42 + 14px); transform: none; margin-bottom: 0; }
+.game.fit .pile .mat { width: calc(var(--pw) * 1.75); height: calc(var(--pw) * 1.75); top: calc(4px + (var(--pw) * 1.42 + 14px - var(--pw) * 1.75) / 2); }
+.game.fit .pile .mat::after { font-size: calc(var(--pw) * .14); }
+.game.fit .pile .pc { left: calc(8px + var(--i) * var(--pw) * .2); top: calc(6px + var(--i) * 1px); }
+.game.fit .pile .pc .card { --w: var(--pw); }
+.game.fit .pack .stack { width: calc(var(--pw) * .8); height: calc(var(--pw) * .8 * 1.42); transform: none; margin-bottom: 0; }
+.game.fit .pack .stack .card { --w: calc(var(--pw) * .8); }
+.game.fit .burnt .ash { font-size: calc(var(--pw) * .6); }

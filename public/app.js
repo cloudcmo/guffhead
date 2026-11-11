@@ -830,6 +830,8 @@ function renderGame(staging = false) {
   // chat, log, rules and the table go in a sheet that pulls up from the bar at the bottom
   const fit = G.status === "playing" && g.phase === "play";
   document.body.classList.toggle("fit", fit);
+  // the one-screen layout needs the header's real height (it differs by look and by phone)
+  if (fit) { const top = document.querySelector(".top"); if (top) document.documentElement.style.setProperty("--toph", `${Math.ceil(top.getBoundingClientRect().bottom + 4)}px`); }
   if (!fit) S.sheet = false;
   const extras = `<div class="toggles"><button class="chip${S.tips ? " on" : ""}" data-toggle="tips" aria-pressed="${S.tips}">🎓 Tips ${S.tips ? "on" : "off"}</button><button class="chip${S.talk ? " on" : ""}" data-toggle="talk" aria-pressed="${S.talk}">🎙️ GuffBot ${S.talk ? "on" : "off"}</button><button class="chip${sound.on ? " on" : ""}" data-toggle="sound" aria-pressed="${sound.on}">${sound.on ? "🔊" : "🔇"}</button></div>`;
   const tabs = `<nav class="tabs4" role="tablist">
