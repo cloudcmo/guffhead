@@ -193,7 +193,7 @@ details { margin: 12px 0; }
 .pile { position: relative; justify-content: flex-start; padding-top: 4px; }
 .mat { position: absolute; width: 92px; height: 92px; border-radius: 50%; top: 4px; left: 50%; transform: translateX(-50%);
   background: radial-gradient(circle, #F4E9CC 0 54%, var(--red) 55% 62%, #F4E9CC 63% 70%, var(--green) 71%); box-shadow: 0 3px 8px rgba(0, 0, 0, .4); opacity: .9; }
-.mat::after { content: "GUFF'S HEAD"; position: absolute; inset: 0; display: grid; place-items: center; font: 900 italic 11px var(--display); color: var(--green); letter-spacing: .06em; opacity: .5; }
+.mat::after { content: "GUFFHEAD"; position: absolute; inset: 0; display: grid; place-items: center; font: 900 italic 11px var(--display); color: var(--green); letter-spacing: .06em; opacity: .5; }
 .fan { position: relative; display: block; width: 100px; height: 92px; }
 .pile > small { margin-top: 4px; }
 .pc { position: absolute; left: calc(14px + var(--i) * 10px); top: calc(8px + var(--i) * 1px); transform: rotate(var(--r)); }
@@ -589,3 +589,89 @@ body.tabs .nexttoast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 .figure.pub { overflow: visible; }
 .clobber { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; font-weight: 600; }
 .clobber li { background: rgba(0, 0, 0, .25); border-radius: 10px; padding: 8px 10px; }
+
+/* ---------- whose go, and one screen for a live game (11 Nov 2026) ---------- */
+.turnbar { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center;
+  margin: 0 0 6px; padding: 6px 12px; border-radius: 14px; min-height: 48px; }
+.turnbar > :first-child:not(.tb-main) { grid-row: 1 / span 2; }
+.turnbar .tb-main { font: 900 1.3rem/1.1 var(--body); letter-spacing: .01em; }
+.turnbar small { font-weight: 700; font-size: .9rem; line-height: 1.25; }
+.turnbar.yours { background: linear-gradient(180deg, #F4D36B, var(--gold)); color: var(--ink); box-shadow: 0 0 0 3px #FFF1B8, 0 0 26px rgba(244, 211, 107, .7); animation: yourGo 1.6s ease-in-out infinite; }
+.turnbar.yours .tb-main { font-size: 1.6rem; }
+.turnbar.yours small { color: #3A2A10; }
+.turnbar.theirs { background: rgba(16, 12, 14, .9); color: var(--cream); border: 2px solid rgba(246, 236, 215, .25); }
+.turnbar.theirs small { color: #E9DCC0; }
+.turnbar.theirs.soon { border-color: rgba(216, 178, 90, .7); }
+.turnbar.theirs.soon small { color: var(--gold-hi); }
+.turnbar.catching { grid-template-columns: 1fr; background: rgba(16, 12, 14, .9); color: var(--cream); border: 2px dashed rgba(216, 178, 90, .5); }
+.turnbar .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--good); vertical-align: middle; box-shadow: 0 0 6px var(--good); }
+@keyframes yourGo { 0%, 100% { box-shadow: 0 0 0 3px #FFF1B8, 0 0 18px rgba(244, 211, 107, .55); } 50% { box-shadow: 0 0 0 3px #FFF1B8, 0 0 34px rgba(244, 211, 107, .95); } }
+@media (prefers-reduced-motion: reduce) { .turnbar.yours { animation: none; } }
+/* your cards: lit up when it's your go, dimmed when it isn't (still tappable, to pick ahead) */
+.mine.turn { border: 2px solid #F4D36B; box-shadow: 0 0 0 1px #F4D36B, 0 0 24px rgba(244, 211, 107, .45); }
+.mine.waiting .hand .card:not(.sel), .mine.waiting .mytable .card { filter: brightness(.62) saturate(.55); }
+.mine.waiting .hand .card.sel { filter: none; }
+.pod.turn { border: 2px solid var(--gold); }
+
+/* one screen: nothing to scroll by accident, no rubber-banding */
+html:has(body.fit), body.fit { overscroll-behavior: none; }
+body.fit .app { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+body.fit .top { padding-top: calc(4px + env(safe-area-inset-top)); padding-bottom: 2px; }
+.game.fit { display: flex; flex-direction: column; height: calc(100dvh - 46px - 70px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+.game.fit .table { flex: 1 1 0; margin: 6px 0; min-height: 150px; max-height: 260px; }
+.game.fit .actions { margin: 6px 0; }
+.game.fit .hint { margin: 0 0 6px; padding: 5px 10px; font-size: .88rem; }
+.game.fit .talkbox p { margin: 3px 0; }
+.game.fit .talkbox .room { display: none; }
+.game.fit .foot { display: none; }
+.game, .table, .opps, .mine { touch-action: manipulation; }
+
+.gamebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; display: flex; gap: 4px; justify-content: space-around; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  background: rgba(16, 12, 14, .95); border-top: 1px solid rgba(216, 178, 90, .35); }
+.gamebar button { flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: rgba(216, 178, 90, .12); color: var(--cream); font: 800 .95rem var(--body); position: relative; }
+.gamebar .count { margin-left: 2px; }
+.sheetback { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, .55); }
+.sheetback[hidden] { display: none; }
+.gsheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 51; max-width: 760px; margin: 0 auto; max-height: 82dvh; display: flex; flex-direction: column;
+  background: #1B1416; border-top: 2px solid var(--gold); border-radius: 18px 18px 0 0; padding: 0 12px calc(10px + env(safe-area-inset-bottom));
+  transform: translateY(105%); transition: transform .22s ease-out; visibility: hidden; overscroll-behavior: contain; }
+.gsheet.open { transform: none; visibility: visible; }
+.gsheet .sheetgrip { align-self: stretch; border: 0; background: transparent; color: var(--gold-hi); font: 800 1rem var(--body); padding: 12px 0 6px; }
+.gsheet .tabs4 { margin-top: 0; }
+.gsheet .tabpanel { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; min-height: 160px; }
+.gsheet .toggles { margin: 8px 0 0; }
+@media (prefers-reduced-motion: reduce) { .gsheet { transition: none; } }
+.podhead .handcount { margin-left: auto; flex: none; }
+.podhead .podname { flex: 1 1 auto; min-width: 0; }
+body.fit .top { min-height: 0; }
+body.fit .sign { padding-top: 3px; padding-bottom: 3px; }
+.gamebar button { min-height: 40px; }
+.game.fit .table { min-height: 118px; }
+.game.fit > * { flex-shrink: 0; }
+.game.fit > .table { flex-shrink: 1; }
+.podhead .handcount { gap: 2px; }
+.podhead .handcount .card { flex: none; }
+.podhead .podname { font-size: .95rem; }
+/* a short table (small phone, your go): everything on it shrinks rather than overlapping */
+.game.fit .table { container-type: size; }
+@container (max-height: 172px) {
+  .mat { width: 64px; height: 64px; }
+  .mat::after { font-size: 8px; }
+  .fan { transform: scale(.7); transform-origin: 50% 0; margin-bottom: -28px; }
+  .stack { transform: scale(.8); transform-origin: 50% 0; margin-bottom: -10px; }
+  .ash { font-size: 1.5rem; }
+  .table small { font-size: .78rem; margin-top: 2px; line-height: 1.15; }
+  .need { font-size: .85rem !important; padding: 2px 10px; bottom: 5px; }
+}
+/* the banner also says what just happened: one place for the talk (11 Nov 2026) */
+.turnbar { grid-template-columns: auto 1fr auto; grid-template-rows: none; }
+.turnbar > :first-child:not(.tb-main) { grid-row: 1 / span 3; align-self: start; margin-top: 2px; }
+.turnbar > .tb-main, .turnbar > small { grid-column: 2; }
+.turnbar .tb-last { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: .88rem; margin-top: 1px; }
+.turnbar .tb-quip { font-family: var(--display); font-style: italic; font-weight: 700; }
+.turnbar.theirs .tb-quip { color: var(--gold-hi); }
+.turnbar.yours .tb-last { color: #2A1E0A; }
+.turnbar .tb-throw { grid-column: 3; grid-row: 1 / span 3; align-self: center; flex-direction: column; margin-left: 4px; }
+.turnbar .tb-throw button { padding: 1px 5px; font-size: .95rem; }
+.turnbar.catching > .tb-main, .turnbar.catching > small { grid-column: 1 / -1; }
+.gamebar button .count { animation: pop .45s cubic-bezier(.2, 1.6, .4, 1); }

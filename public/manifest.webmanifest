@@ -1,7 +1,7 @@
 {
   "name": "Guffhead",
   "short_name": "Guffhead",
-  "description": "The card game with the rude name, in the back room of The Guff's Head.",
+  "description": "The card game with the rude name, in the back room of a 1970s pub.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

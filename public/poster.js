@@ -45,7 +45,7 @@ export function svg({ id, names, loser = null, order = [], size = 320 }) {
       <text x="160" y="50" text-anchor="middle" font-family="${FONT}" font-size="19" font-weight="700" letter-spacing="1.2" fill="${c2}">${esc(head)}</text>
       <path d="M70 60 q90 8 180 0" stroke="${c2}" stroke-width="2" fill="none" opacity=".8"/>
       <text x="160" y="108" text-anchor="middle" font-family="${FONT}" font-size="${fs}" font-weight="700" fill="${c1}">${esc(vs)}</text>
-      <text x="160" y="140" text-anchor="middle" font-family="${FONT}" font-size="18" font-weight="700" fill="${c1}">at The Guff's Head</text>
+      <text x="160" y="140" text-anchor="middle" font-family="${FONT}" font-size="18" font-weight="700" fill="${c1}">in the back room</text>
     </g>
     ${result}${firstOut}${loser ? "" : doodle}
   </svg>`;
