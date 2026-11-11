@@ -14,10 +14,23 @@
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon-32.png" sizes="32x32">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script>
+  /* the look (11 Nov 2026): set before anything paints. pub = the 70s back room, britpop = the 90s, clean = 2030 */
+  (function () {
+    var t = "clean";
+    try { t = localStorage.getItem("gh-theme") || t; } catch (e) {}
+    if (["pub", "britpop", "clean"].indexOf(t) < 0) t = "clean";
+    document.documentElement.dataset.theme = t;
+    var c = { pub: "#1C3A2C", britpop: "#0E1633", clean: "#F2F4F8" }[t];
+    document.querySelector('meta[name="theme-color"]').content = c;
+    if (t === "clean") document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content = "default";
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700;1,800;1,900&family=Nunito:wght@500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;0,900;1,700;1,800;1,900&family=Nunito:wght@500;600;700;800&family=Archivo+Black&family=Inter:wght@500;600;700;800;900&display=swap">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="themes.css">
 </head>
 <body>
 <header class="top">

@@ -2,7 +2,10 @@
 // and colourful circles", instead of too much brown). Each is a small SVG tile drawn here, so nothing to download.
 // A game always has the same wallpaper on every phone (picked from the game's id); the bar picks afresh each visit.
 //
-//   Wallpaper.pick(seed) -> { id, name, css }   css is a background value for <body>
+// Since 11 Nov 2026 there are three looks (Carl: "Maybe a 1990s britpop era and a modern clean 2030 look. It's a bit
+// off-putting all the brown and 1970s"): each has its own papers.
+//
+//   Wallpaper.pick(seed, theme) -> { id, name, css }   css is a background value for <body>; theme: pub | britpop | clean
 
 const enc = (svg) => `url("data:image/svg+xml,${encodeURIComponent(svg.replace(/\s+/g, " "))}")`;
 
@@ -61,7 +64,66 @@ export const PAPERS = [
   { id: "bubbles-lime", name: "Lime bubbles", css: () => bubbles("#1F5F4A", ["#9BC53D", "#EBD86A", "#E8772E", "#9CC9C3"]) },
 ];
 
-export function pick(seed) {
-  const p = PAPERS[(seed >>> 0) % PAPERS.length];
-  return { id: p.id, name: p.name, css: p.css() };
+/* ---------- 1990s: mod roundels, two-tone check, a faded flag, Memphis confetti ---------- */
+function roundels(bg, rings, size = 110) {
+  const h = size / 2;
+  const disc = (cx, cy) => rings.map((c, i) => `<circle cx="${cx}" cy="${cy}" r="${h * 0.8 * (1 - i / rings.length)}" fill="${c}"/>`).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <rect width="${size}" height="${size}" fill="${bg}"/>${disc(h / 2, h / 2)}${disc(h * 1.5, h * 1.5)}</svg>`;
+  return `${enc(svg)} 0 0 / ${size}px ${size}px, ${bg}`;
+}
+function check(a, b, size = 44) {
+  const h = size / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect width="${size}" height="${size}" fill="${a}"/><rect width="${h}" height="${h}" fill="${b}"/><rect x="${h}" y="${h}" width="${h}" height="${h}" fill="${b}"/></svg>`;
+  return `${enc(svg)} 0 0 / ${size}px ${size}px, ${a}`;
+}
+function flag(blue, white, red) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="180" viewBox="0 0 60 36">
+    <rect width="60" height="36" fill="${blue}"/>
+    <path d="M0 0 L60 36 M60 0 L0 36" stroke="${white}" stroke-width="7"/>
+    <path d="M0 0 L60 36 M60 0 L0 36" stroke="${red}" stroke-width="2.4"/>
+    <path d="M30 0 V36 M0 18 H60" stroke="${white}" stroke-width="11"/>
+    <path d="M30 0 V36 M0 18 H60" stroke="${red}" stroke-width="6.5"/></svg>`;
+  return `${enc(svg)} 0 0 / 300px 180px, ${blue}`;
+}
+function memphis(bg, cols) {
+  const bits = [
+    (c) => `<path d="M8 20 q6 -10 12 0 t12 0 t12 0" stroke="${c}" stroke-width="4" fill="none" stroke-linecap="round"/>`,
+    (c) => `<path d="M70 10 L84 34 L56 34 Z" fill="${c}"/>`,
+    (c) => `<circle cx="104" cy="60" r="9" fill="none" stroke="${c}" stroke-width="4"/>`,
+    (c) => `<rect x="20" y="70" width="18" height="18" fill="${c}" transform="rotate(20 29 79)"/>`,
+    (c) => `<path d="M60 96 l20 -20 M66 102 l20 -20" stroke="${c}" stroke-width="4" stroke-linecap="round"/>`,
+    (c) => `<circle cx="100" cy="108" r="5" fill="${c}"/>`,
+    (c) => `<path d="M14 118 q8 -8 16 0 t16 0" stroke="${c}" stroke-width="4" fill="none" stroke-linecap="round"/>`,
+  ];
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" fill="${bg}"/>${bits.map((f, i) => f(cols[i % cols.length])).join("")}</svg>`;
+  return `${enc(svg)} 0 0 / 128px 128px, ${bg}`;
+}
+const NINETIES = [
+  { id: "mod-roundels", name: "Mod roundels", css: () => roundels("#14204A", ["#2E5BD8", "#F4F4F0", "#D7263D"]) },
+  { id: "two-tone", name: "Two-tone check", css: () => check("#17171B", "#2C2C33") },
+  { id: "flag", name: "A faded flag", css: () => flag("#1A2A5C", "#3A4A7C", "#5A2A44") },
+  { id: "memphis-navy", name: "Memphis confetti", css: () => memphis("#14204A", ["#FFD447", "#E63946", "#4FC3F7", "#F4F4F0"]) },
+  { id: "memphis-purple", name: "Purple confetti", css: () => memphis("#2E1650", ["#FFD447", "#3FD0C9", "#FF6B9A", "#F4F4F0"]) },
+  { id: "red-roundels", name: "Red roundels", css: () => roundels("#5A1020", ["#F4F4F0", "#2E5BD8", "#F4F4F0"], 96) },
+];
+
+/* ---------- 2030: soft light, a dot grid, nothing loud ---------- */
+function dots(bg, dot, size = 22) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect width="${size}" height="${size}" fill="${bg}"/><circle cx="${size / 2}" cy="${size / 2}" r="1.2" fill="${dot}"/></svg>`;
+  return `${enc(svg)} 0 0 / ${size}px ${size}px, ${bg}`;
+}
+const glow = (bg, a, b) => `radial-gradient(60% 50% at 15% 10%, ${a}, transparent 70%) fixed, radial-gradient(55% 45% at 90% 85%, ${b}, transparent 70%) fixed, ${bg}`;
+const CLEAN = [
+  { id: "mist", name: "Morning mist", css: () => glow("#F2F4F8", "#DCE3FF", "#FFE3EC") },
+  { id: "sage", name: "Sage light", css: () => glow("#F3F5F1", "#DDEBDC", "#E8E6FF") },
+  { id: "dotgrid", name: "Dot grid", css: () => dots("#F4F5F8", "#C9CED9") },
+  { id: "peach", name: "Peach haze", css: () => glow("#F7F4F1", "#FFE1CC", "#DDE9FF") },
+];
+
+const SETS = { pub: PAPERS, britpop: NINETIES, clean: CLEAN };
+export function pick(seed, theme = "pub") {
+  const list = SETS[theme] || PAPERS;
+  const p = list[(seed >>> 0) % list.length];
+  return { id: `${theme}:${p.id}`, name: p.name, css: p.css() };
 }

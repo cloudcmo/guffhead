@@ -25,6 +25,7 @@ const S = {
   token: store.get("gh:token"),
   me: store.get("gh:me"),
   looks: {}, opponents: [], house: [], games: [], push: false,
+  theme: document.documentElement.dataset.theme || "clean",   // the look: clean (2030), britpop (1990s) or pub (1970s)
   G: null,            // the game on screen (the latest view from the server)
   evs: [],            // every event of that game we know about
   here: [],           // who else is at the table right now
@@ -97,6 +98,19 @@ const HANKY = `<g class="hanky"><path d="M24 42 C22 18 106 18 104 42 C88 46 40 4
 const FAG = `<g class="fag"><g transform="rotate(16 86 95)"><rect x="84" y="92" width="30" height="5.5" rx="1.5" fill="#FBFAF6" stroke="#BDB6A6" stroke-width=".8"/><rect x="84" y="92" width="8" height="5.5" rx="1.5" fill="#D9A55A"/><rect x="111" y="92" width="4" height="5.5" rx="1" fill="#E5482B"/></g>
   <path class="smoke" d="M117 100 C111 92 121 86 115 78 C109 70 119 64 113 56" stroke="#D8D8D8" stroke-width="2.6" fill="none" stroke-linecap="round" opacity=".75"/></g>`;
 
+/* The other looks (11 Nov 2026). The 90s: GuffBot in a bucket hat, Ms GuffBot in a bandana. 2030: GuffBot in a
+   beanie, Ms GuffBot with her sunglasses pushed up. */
+const BUCKET = `<g class="bucket"><path d="M34 40 C34 13 94 13 94 40 Z" fill="#23305A" stroke="#11182E" stroke-width="2"/><path d="M36 33 C56 30 72 30 92 33" stroke="#3A4A7C" stroke-width="2" fill="none"/>
+  <path d="M12 45 C28 34 100 34 116 45 C104 54 24 54 12 45 Z" fill="#2C3A6A" stroke="#11182E" stroke-width="2"/></g>`;
+const BANDANA = `<g class="bandana"><path d="M24 40 C22 15 106 15 104 40 C88 45 40 45 24 40 Z" fill="#D7263D" stroke="#8E1424" stroke-width="2"/>
+  ${[[44, 28], [64, 22], [84, 28], [54, 36], [76, 36], [96, 34]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.6" fill="#fff"/>`).join("")}
+  <path d="M102 37 l16 5 l-7 11 Z M102 37 l13 -6 l3 12 Z" fill="#D7263D" stroke="#8E1424" stroke-width="1.6"/></g>`;
+const BEANIE = `<g class="beanie"><path d="M27 44 C25 8 103 8 101 44 Z" fill="#2F5D46"/>${[38, 50, 64, 78, 90].map((x) => `<path d="M${x} ${x === 64 ? 12 : 16} V36" stroke="#24493A" stroke-width="2.4"/>`).join("")}
+  <rect x="23" y="34" width="82" height="15" rx="7" fill="#24493A"/>${[32, 44, 56, 68, 80, 92].map((x) => `<path d="M${x} 36 V47" stroke="#1C3A2E" stroke-width="2"/>`).join("")}</g>`;
+const SHADES = `<g class="shades"><path d="M28 21 L18 28 M100 21 L110 28" stroke="#16171A" stroke-width="3" stroke-linecap="round"/><rect x="28" y="12" width="32" height="17" rx="8" fill="#16171A"/><rect x="68" y="12" width="32" height="17" rx="8" fill="#16171A"/>
+  <path d="M60 19 H68" stroke="#16171A" stroke-width="3"/><path d="M33 16 l8 0 M73 16 l8 0" stroke="#5A5E6A" stroke-width="2" stroke-linecap="round"/></g>`;
+const HATS = { pub: { gb: CAP, ms: HANKY + FAG }, britpop: { gb: BUCKET, ms: BANDANA }, clean: { gb: BEANIE, ms: SHADES } };
+const hatFor = (pid) => (XMAS ? SANTA : (HATS[S.theme] || HATS.pub)[pid === "msguffbot" ? "ms" : "gb"]);
 const SANTA = `<g transform="translate(64 6)"><path d="M-40 14 C-30 -24 26 -34 44 -6 L52 16 Z" fill="#C8252C"/><circle cx="50" cy="16" r="9" fill="#fff"/><rect x="-46" y="8" width="96" height="14" rx="7" fill="#fff"/></g>`;
 const lookOf = (pid) => window.Avatar.lookOf(pid, S.looks[pid]);
 /** A head, with the 💩 sitting on it if they're the reigning Guffhead. drop: it lands now (the moment they lose). */
@@ -108,8 +122,7 @@ function headOf(pid, size = 36, poo = false, drop = false) {
 function bareHead(pid, size) {
   if (isHouse(pid)) {
     const ms = pid === "msguffbot";
-    const hat = XMAS ? SANTA : ms ? HANKY : CAP;
-    return `<svg class="avatar house${ms ? " ms" : ""}" viewBox="-4 -8 136 136" width="${size}" height="${size}" role="img" aria-label="${nameOf(pid)}"><image href="guffbot.webp" x="0" y="0" width="128" height="128"/>${hat}${ms ? FAG : ""}</svg>`;
+    return `<svg class="avatar house${ms ? " ms" : ""}" viewBox="-4 -8 136 136" width="${size}" height="${size}" role="img" aria-label="${nameOf(pid)}"><image href="guffbot.webp" x="0" y="0" width="128" height="128"/>${hatFor(pid)}</svg>`;
   }
   return window.Avatar.svg(lookOf(pid), size, { label: nameOf(pid), xmas: XMAS });
 }
@@ -125,10 +138,10 @@ const dressOf = (pid) => (pid === "guffbot" ? "lads" : pid === "msguffbot" ? "la
 function skinOf(look) { const k = window.Avatar.PARTS.skin.find((x) => x.id === look.skin); return k ? k.hex : undefined; }
 function dressed(pid, seed, size, o = {}) {
   if (!window.Pub) return null;
-  if (pid === "guffbot") return window.Pub.guffbot(seed, size, { hat: XMAS ? SANTA : CAP });
-  if (pid === "msguffbot") return window.Pub.ms(seed, size, { hat: (XMAS ? SANTA : HANKY) + FAG });
+  if (pid === "guffbot") return window.Pub.guffbot(seed, size, { hat: hatFor(pid), era: S.theme });
+  if (pid === "msguffbot") return window.Pub.ms(seed, size, { hat: hatFor(pid), era: S.theme });
   const look = lookOf(pid);
-  return window.Pub.wear(seed, size, window.Avatar.head(look, { transform: HEADBOX, xmas: XMAS }), { pref: o.pref || dressOf(pid), skin: skinOf(look), label: nameOf(pid) });
+  return window.Pub.wear(seed, size, window.Avatar.head(look, { transform: HEADBOX, xmas: XMAS }), { pref: o.pref || dressOf(pid), era: S.theme, skin: skinOf(look), label: nameOf(pid) });
 }
 function bareFigure(seedKey, pid, size) {
   const seed = seedOf(`${seedKey}:${pid}`);
@@ -195,10 +208,13 @@ const shuffleSound = () => { if (sound.on) for (let i = 0; i < 10; i++) noise(0.
 /* ---------- the wallpaper: 70s flock or circles, the same for everyone at a table, a fresh one at the bar ---------- */
 const BAR_SEED = Math.floor(Math.random() * 1e9);
 function paper(seed) {
-  const p = pickPaper(seed);
+  S.paperSeed = seed;
+  const p = pickPaper(seed, S.theme);
   if (document.body.dataset.paper === p.id) return p;
   document.body.dataset.paper = p.id;
-  document.body.style.background = `radial-gradient(ellipse 120% 90% at 50% 30%, rgba(10, 6, 4, .05), rgba(10, 6, 4, .55)), linear-gradient(rgba(10, 6, 4, .22), rgba(10, 6, 4, .22)), ${p.css}`;
+  const dim = { pub: "radial-gradient(ellipse 120% 90% at 50% 30%, rgba(10, 6, 4, .05), rgba(10, 6, 4, .55)), linear-gradient(rgba(10, 6, 4, .22), rgba(10, 6, 4, .22)), ",
+    britpop: "radial-gradient(ellipse 120% 90% at 50% 30%, rgba(4, 8, 24, 0), rgba(4, 8, 24, .45)), ", clean: "" }[S.theme] ?? "";
+  document.body.style.background = `${dim}${p.css}`;
   document.body.style.backgroundAttachment = "fixed";
   return p;
 }
@@ -327,6 +343,7 @@ async function renderLobby() {
         <button class="btn gold" id="invite">📨 Make an invite link</button>
         <div id="inviteOut"></div>
       </div>`}
+      ${looksCard()}
       ${wardrobeCard()}
       ${notifyCard()}
       <details class="howto"><summary>How to play</summary>${howTo(R)}</details>
@@ -346,6 +363,7 @@ async function renderLobby() {
   $("deal").onclick = () => start({ players: NEW.crew, settings: NEW.rules });
   if ($("invite")) $("invite").onclick = () => makeInvite();
   wireWardrobe();
+  wireLooks();
   $("logout").onclick = async () => { try { await api("/logout", { method: "POST" }); } catch {} logout(); };
   app.querySelectorAll("[data-nudge]").forEach((b) => (b.onclick = async (e) => {
     e.preventDefault(); e.stopPropagation();
@@ -359,8 +377,28 @@ async function renderLobby() {
   S.poll = setInterval(() => { if ((location.hash || "#/") === "#/" && !document.hidden && !document.activeElement.matches("select") && !$("welcome")) renderLobby(); }, 20000);
 }
 
+/* ---------- the look (Carl, 11 Nov 2026: "Can we offer some alternate themes. Maybe a 1990s britpop era and a modern
+   clean 2030 look") ---------- */
+const LOOKS = [["clean", "2030", "Clean and light"], ["britpop", "1990s", "Britpop"], ["pub", "1970s", "The pub"]];
+function looksCard() {
+  return `<h2>The look</h2><div class="looks">${LOOKS.map(([id, name, sub]) => `<button data-look="${id}" class="${S.theme === id ? "on" : ""}" aria-pressed="${S.theme === id}"><span class="swatch ${id}"></span>${name}<small>${sub}</small></button>`).join("")}</div>
+    <p class="small soft lookfoot">Just for this phone.</p>`;
+}
+function setTheme(t) {
+  S.theme = t;
+  try { localStorage.setItem("gh-theme", t); } catch {}
+  document.documentElement.dataset.theme = t;
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.content = { pub: "#1C3A2C", britpop: "#0E1633", clean: "#F2F4F8" }[t];
+  paper(S.paperSeed ?? BAR_SEED);
+}
+function wireLooks() {
+  $("app").querySelectorAll("[data-look]").forEach((b) => (b.onclick = () => { if (b.dataset.look !== S.theme) { setTheme(b.dataset.look); buzz(10); renderLobby(); } }));
+}
+
 /* ---------- the wardrobe ---------- */
-const DRESS_CHOICES = [["lads", "👔 Lads' gear", "and a pint"], ["ladies", "👗 Ladies' gear", "and a cocktail"], ["any", "🎲 Surprise me", "either, every game"]];
+const DRINKS = { pub: ["and a pint", "and a cocktail"], britpop: ["and a pint of lager", "and an alcopop"], clean: ["and a craft beer", "and a spritz"] };
+const dressChoices = () => { const d = DRINKS[S.theme] || DRINKS.pub; return [["lads", "👔 Lads' gear", d[0]], ["ladies", "👗 Ladies' gear", d[1]], ["any", "🎲 Surprise me", "either, every game"]]; };
 function wardrobeCard() {
   return window.Pub ? `<h2>What you're wearing tonight</h2>${wardrobePanel()}` : "";
 }
@@ -370,8 +408,8 @@ function wardrobePanel() {
   return `<div class="card-panel wardrobe">
       <div class="tryon">${dressed(S.me.id, seed, 150)}</div>
       <div class="wardtext">
-        <p class="small">${esc(window.Pub.caption("", seed, mine))}</p>
-        <div class="chips dress">${DRESS_CHOICES.map(([id, label, sub]) => `<button class="chip${mine === id ? " on" : ""}" data-dress="${id}">${label}<small>${sub}</small></button>`).join("")}</div>
+        <p class="small">${esc(window.Pub.caption("", seed, mine, S.theme))}</p>
+        <div class="chips dress">${dressChoices().map(([id, label, sub]) => `<button class="chip${mine === id ? " on" : ""}" data-dress="${id}">${label}<small>${sub}</small></button>`).join("")}</div>
         <button class="linkish" id="tryOn">Try something else on</button>
         <p class="small soft">A different outfit every game, from the wardrobe you pick.</p>
       </div>
@@ -826,7 +864,7 @@ function renderGame(staging = false) {
       </div>
       <nav class="gamebar" aria-label="More">${chatty ? `<button data-sheet="chat">💬 Chat${unread() ? ` <span class="count">${unread()}</span>` : ""}</button>` : ""}<button data-sheet="log">📜 Log</button><button data-sheet="rules">📏 Rules</button><button data-sheet="table">🪑 Table</button></nav>`
       : `${extras}${tabs}<div class="tabpanel" id="tabpanel">${tabPanel(G)}</div>`}
-      <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a><br><small class="soft">Tonight's wallpaper: ${esc(pickPaper(seedOf(G.id)).name.toLowerCase())}</small></p>
+      <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a><br><small class="soft">Tonight's wallpaper: ${esc(pickPaper(seedOf(G.id), S.theme).name.toLowerCase())}</small></p>
     </section>`;
   S.lastDir = g.dir;
   if (staging) window.scrollTo(0, keep);
@@ -838,7 +876,7 @@ function renderGame(staging = false) {
 /** Who's wearing what tonight, in the pub's own words. */
 function clobber(G) {
   if (!window.Pub) return "";
-  return `<ul class="clobber">${G.players.filter((p) => !isHouse(p)).map((p) => `<li>${esc(window.Pub.caption(p === S.me.id ? "" : nameOf(p), seedOf(`${G.id}:${p}`), dressOf(p)))}</li>`).join("")}</ul>`;
+  return `<ul class="clobber">${G.players.filter((p) => !isHouse(p)).map((p) => `<li>${esc(window.Pub.caption(p === S.me.id ? "" : nameOf(p), seedOf(`${G.id}:${p}`), dressOf(p), S.theme))}</li>`).join("")}</ul>`;
 }
 const tabBtn = (k, label) => `<button class="tabbtn${S.tab === k ? " on" : ""}" data-tab4="${k}" role="tab" aria-selected="${S.tab === k}">${label}</button>`;
 function tabPanel(G) {
@@ -916,7 +954,7 @@ function oppPod(G, p, turnId, nextId) {
   const known = (p.known || []).slice();
   const out = p.out ? `<span class="outbadge">${p.out === 1 ? "Out first" : "Out"}</span>` : "";
   return `<div class="pod${turn ? " turn" : ""}${p.out ? " isout" : ""}${G.loser === p.id ? " guffhead" : ""}">
-    <div class="podhead">${headOf(p.id, 34, wears(G, p.id), S.drop && wears(G, p.id))}<span class="podname">${esc(nameOf(p.id))}${here ? `<i class="dot" title="At the table now"></i>` : ""}${status}</span>${out}<span class="handcount" title="${hand} in hand">${hand ? `${back({ size: "xs" })}<b>${hand}</b>` : `<b class="none">0</b>`}</span></div>
+    <div class="podhead"><span class="podav">${headOf(p.id, 34, wears(G, p.id), S.drop && wears(G, p.id))}<b class="handbadge${hand ? "" : " none"}" title="${hand} in hand">${hand}</b></span><span class="podname">${esc(nameOf(p.id))}${here ? `<i class="dot" title="At the table now"></i>` : ""}${status}</span>${out}</div>
     <div class="podcards">
       <span class="tablecards">${tableStack(p, "op", G.settings)}</span>
     </div>
