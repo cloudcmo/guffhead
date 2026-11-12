@@ -229,7 +229,9 @@ export function options(st) {
 export function forcedMove(st) {
   const o = options(st);
   if (!o) return null;
-  if (o.zone === "down") return { act: "flip", index: 0, forced: true };
+  // Face-down cards: only forced when there's one left. With two or more it's your pick, even blind (Carl and Nick,
+  // 12 Nov 2026: Nick lost a game the page flipped for him; turning them in a different order would have won it).
+  if (o.zone === "down") return st.seats[st.turn].down.length === 1 ? { act: "flip", index: 0, forced: true } : null;
   if (!o.plays.length) return o.pickUp ? { act: "pickup", forced: true } : null;
   if (o.plays.length === 1 && o.plays[0].cards.length === 1 && !(o.pickUp && st.settings.pickUpAnyTime)) return { act: "play", cards: o.plays[0].cards.slice(), forced: true };
   return null;

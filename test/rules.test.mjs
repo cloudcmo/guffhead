@@ -132,6 +132,16 @@ t("forced: one card that goes is played for you", () => {
   st.seats[0].hand = ["4S", "QH", "KH"];
   assert.equal(R.forcedMove(st), null);
 });
+t("forced: face-down cards are only flipped for you when there's one left", () => {
+  // Nick, 12 Nov 2026: the page flipped JS, 7D, 5D for him and he lost; 5D, 7D, JS would have won it
+  const st = table({}, [{ hand: [], up: [], down: ["JS", "7D", "5D"] }, { hand: ["3C"] }]);
+  st.pile = ["5H", "5C"];
+  assert.equal(R.forcedMove(st), null, "three face-down: their pick");
+  st.seats[0].down = ["JS", "7D"];
+  assert.equal(R.forcedMove(st), null, "two face-down: their pick");
+  st.seats[0].down = ["JS"];
+  assert.deepEqual(R.forcedMove(st), { act: "flip", index: 0, forced: true }, "one face-down: no choice");
+});
 t("start: lowest ordinary card", () => {
   const st = R.newGame(["a", "b"], {}, rnd);
   st.seats[0].hand = ["2S", "TS", "9S"]; st.seats[1].hand = ["4C", "KH", "AD"];
@@ -212,3 +222,4 @@ for (let k = 0; k < 300; k++) {
   assert.ok(!v.events.find((e) => e.k === "start").deal, "deal hidden mid-game");
 }
 console.log(`replay: ${replayed} finished games rebuilt exactly from the deal`);
+
