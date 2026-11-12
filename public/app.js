@@ -347,7 +347,7 @@ async function renderLobby() {
       ${wardrobeCard()}
       ${notifyCard()}
       <details class="howto"><summary>How to play</summary>${howTo(R)}</details>
-      <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a> · <button class="linkish" id="logout">Go home</button><br><small class="soft">Version ${esc(BUILD)}</small></p>
+      <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a> · <button class="linkish" type="button" data-guff-feedback>Tell GuffBot</button> · <button class="linkish" id="logout">Go home</button><br><small class="soft">Version ${esc(BUILD)}</small></p>
     </section>`;
   const app = $("app");
   app.querySelectorAll("[data-crew]").forEach((b) => (b.onclick = () => { const id = b.dataset.crew; NEW.crew = NEW.crew.includes(id) ? NEW.crew.filter((x) => x !== id) : [...NEW.crew, id]; renderLobby(); }));
@@ -1592,7 +1592,7 @@ async function renderRecord() {
       </div>
       <h2>Head to head</h2>
       <div class="card-panel">${Object.keys(vs).length ? `<table class="h2h"><tr><th></th><th>Games</th><th>You 💩</th><th>Them 💩</th></tr>${Object.entries(vs).sort((a, b) => b[1].played - a[1].played).map(([p, v]) => `<tr><td>${headOf(p, 24)} ${esc(nameOf(p) === p ? names[p] : nameOf(p))}</td><td>${v.played}</td><td>${v.me}</td><td>${v.them}</td></tr>`).join("")}</table>` : `<p class="soft">No finished games yet.</p>`}</div>
-      <p class="foot"><a href="#/">Back to the bar</a></p>
+      <p class="foot"><a href="#/">Back to the bar</a> · <button class="linkish" type="button" data-guff-feedback>Bugs or ideas? Tell GuffBot</button></p>
     </section>`;
 }
 
