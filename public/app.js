@@ -374,9 +374,9 @@ async function renderLobby() {
   const nx = $("newsX");
   if (nx) nx.onclick = () => { store.set("gh:newsOff", tonight()); nx.parentElement.remove(); };
   wireNotify();
-  maybeWelcome();
+  if (!maybeLook()) maybeWelcome();
   clearInterval(S.poll);
-  S.poll = setInterval(() => { if ((location.hash || "#/") === "#/" && !document.hidden && !document.activeElement.matches("select") && !$("welcome")) renderLobby(); }, 20000);
+  S.poll = setInterval(() => { if ((location.hash || "#/") === "#/" && !document.hidden && !document.activeElement.matches("select") && !$("welcome") && !$("lookpick")) renderLobby(); }, 20000);
 }
 
 /* ---------- the look (Carl, 11 Nov 2026: "Can we offer some alternate themes. Maybe a 1990s britpop era and a modern
@@ -384,7 +384,7 @@ async function renderLobby() {
 const LOOKS = [["clean", "2030", "Clean and light"], ["britpop", "1990s", "Britpop"], ["pub", "1970s", "The pub"]];
 function looksCard() {
   return `<h2>The look</h2><div class="looks">${LOOKS.map(([id, name, sub]) => `<button data-look="${id}" class="${S.theme === id ? "on" : ""}" aria-pressed="${S.theme === id}"><span class="swatch ${id}"></span>${name}<small>${sub}</small></button>`).join("")}</div>
-    <p class="small soft lookfoot">Just for this phone.</p>`;
+    <p class="small soft lookfoot">Just for this phone. Change it whenever you like.</p>`;
 }
 function setTheme(t) {
   S.theme = t;
@@ -440,11 +440,34 @@ function newsLine(news) {
   return `<p class="news card-panel">${esc(line)}<button class="x" id="newsX" aria-label="Hide for today">×</button></p>`;
 }
 
+/* ---------- pick your look, once (Carl, 13 Nov 2026: "Let people pick their own default. On first run (or as a one-off
+   if they're already playing), present the options and let them choose... tell them they can change any time") ---------- */
+const LOOK_ASKED = "gh:look-asked";
+function maybeLook() {
+  if (store.get(LOOK_ASKED) || $("lookpick")) return !!$("lookpick");
+  const sheet = document.createElement("div");
+  sheet.id = "lookpick"; sheet.className = "sheet";
+  const draw = () => {
+    sheet.innerHTML = `<div class="sheetcard lookcard">
+      <div class="sheethead">${headOf("guffbot", 56)}<h3>Pick your look</h3></div>
+      <p>Guffhead comes in three. Tap one to try it on.</p>
+      <div class="looks big">${LOOKS.map(([id, name, sub]) => `<button data-pick="${id}" class="${S.theme === id ? "on" : ""}" aria-pressed="${S.theme === id}"><span class="swatch ${id}"></span>${name}<small>${sub}</small></button>`).join("")}</div>
+      <button class="btn gold big" id="lookDone">That's the one</button>
+      <p class="small soft">You can change it any time: it's in the lobby, under The look.</p>
+    </div>`;
+    sheet.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => { setTheme(b.dataset.pick); buzz(10); draw(); }));
+    sheet.querySelector("#lookDone").onclick = () => { store.set(LOOK_ASKED, 1); sheet.remove(); renderLobby(); };
+  };
+  draw();
+  document.body.appendChild(sheet);
+  return true;
+}
+
 /* ---------- welcome: notifications and the Home Screen (borrowed from CountGuff) ----------
    If notifications aren't on for this phone, a sheet after login: at most three times, never twice in 20 hours. */
 const WELCOME_KEY = "gh:welcome", WELCOME_MAX = 3, WELCOME_GAP = 20 * 3600000;
 async function maybeWelcome() {
-  if (!S.push || $("welcome")) return;
+  if (!S.push || $("welcome") || $("lookpick")) return;
   const st = await pushState();
   if (st === "on" || st === "denied" || st === "unsupported") return;
   const w = store.get(WELCOME_KEY) || { n: 0, last: 0 };

@@ -136,3 +136,10 @@ html[data-theme="clean"] .evlog li.burn { color: #C2410C; }
 html[data-theme="britpop"] .soft { color: #D6DEF2; }
 html[data-theme="clean"] .automenu { background: #fff; box-shadow: 0 10px 30px rgba(16, 24, 40, .18); }
 html[data-theme="clean"] .myhead .autobtn.on { color: #fff; }
+.looks.big .swatch { height: 84px; }
+.looks.big button { font-size: 1rem; }
+.lookcard > p { margin: 6px 0 12px; }
+.lookcard .btn.big { width: 100%; margin-top: 14px; }
+.lookcard > p.small { margin: 10px 0 0; text-align: center; }
+html[data-theme="clean"] .sheetcard { background: #fff; border-color: #E3E7EE; box-shadow: 0 -10px 40px rgba(16, 24, 40, .18); }
+html[data-theme="britpop"] .sheetcard { background: #13204A; }
