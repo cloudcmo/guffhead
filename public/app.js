@@ -212,8 +212,10 @@ function paper(seed) {
   const p = pickPaper(seed, S.theme);
   if (document.body.dataset.paper === p.id) return p;
   document.body.dataset.paper = p.id;
-  const dim = { pub: "radial-gradient(ellipse 120% 90% at 50% 30%, rgba(10, 6, 4, .05), rgba(10, 6, 4, .55)), linear-gradient(rgba(10, 6, 4, .22), rgba(10, 6, 4, .22)), ",
-    britpop: "radial-gradient(ellipse 120% 90% at 50% 30%, rgba(4, 8, 24, 0), rgba(4, 8, 24, .45)), ", clean: "" }[S.theme] ?? "";
+  // a calming wash over the 70s and 90s papers (Carl, 13 Nov 2026: "mute the severity of the wallpapers. They are too
+  // distracting"): the pattern and the era still show through, as a quiet tone-on-tone texture
+  const dim = { pub: "linear-gradient(rgba(26, 24, 30, .8), rgba(26, 24, 30, .8)), ",
+    britpop: "linear-gradient(rgba(14, 22, 51, .8), rgba(14, 22, 51, .8)), ", clean: "" }[S.theme] ?? "";
   document.body.style.background = `${dim}${p.css}`;
   document.body.style.backgroundAttachment = "fixed";
   return p;
