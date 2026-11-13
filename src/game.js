@@ -65,6 +65,15 @@ export function runHouse(st, rand = rnd, present = new Set()) {
     if (g.phase === "play") {
       const id = g.seats[g.turn].id;
       if (isBot(id)) { R.perform(g, id, choose(g, id, rand)); continue; }
+      // AutoPlay, switched on by the player themselves: GuffBot (with Ms GuffBot's brain) takes their go
+      const ap = st.auto && st.auto[id];
+      if (ap) {
+        R.perform(g, id, R.forcedMove(g) || choose(g, "msguffbot", rand), { autopilot: true });
+        ap.played = (ap.played || 0) + 1;
+        if (ap.left != null && --ap.left <= 0) delete st.auto[id];
+        st.lastAct = now();
+        continue;
+      }
       const f = R.forcedMove(g);
       if (f && present.has(id)) { st.held = id; return; }
       if (f) { R.perform(g, id, f, { forced: true }); continue; }
@@ -121,7 +130,18 @@ export function perform(st, pid, body, rand = rnd, present = new Set([pid])) {
     if (a === "setup") R.setUp(g, pid, body.up);
     else if (a === "ready") { if (Array.isArray(body.up)) R.setUp(g, pid, body.up); R.ready(g, pid); }
     else if (a === "resign") R.resign(g, pid);
-    else if (a === "play" || a === "pickup" || a === "flip") {
+    else if (a === "autoplay") {
+      // Carl, 13 Nov 2026: "click AutoPlay and choose: next move, next 3 moves or until I return to the game"
+      st.auto = st.auto || {};
+      if (body.off) delete st.auto[pid];
+      else {
+        if (g.phase !== "play") no("AutoPlay starts once the cards are down");
+        const n = body.n === "back" ? null : Number(body.n);
+        if (n !== null && ![1, 3].includes(n)) no("Next go, next three, or until you're back");
+        st.auto[pid] = { left: n, set: now(), played: 0 };
+      }
+    } else if (a === "play" || a === "pickup" || a === "flip") {
+      if (st.auto) delete st.auto[pid];   // you're playing for yourself again
       if (body.seq != null && Number(body.seq) !== g.seq) no("Things have moved on. Have another look.", 409);
       R.perform(g, pid, { act: a, cards: body.cards, index: body.index });
     } else no("Play, pick up or flip");
@@ -145,7 +165,7 @@ export function viewFor(st, pid, since = 0) {
   const out = {
     id: st.id, by: st.by, players: st.players, names: st.names, bots: st.bots, settings: st.settings, status: st.status,
     loser: st.loser || null, reigning: st.reigning || null, wearer: wearer(st), created: st.created, updated: st.updated, lastAct: st.lastAct, prev: st.prev || null, next: st.next || null,
-    me: pid, required: req, myGo, g,
+    me: pid, required: req, myGo, g, auto: st.auto || {},
   };
   if (myGo && st.g.phase === "play") { out.options = R.options(st.g); out.hint = hint(st.g, pid); }
   if (st.g.phase === "swap") {
@@ -524,6 +544,18 @@ export async function getGame(env, who, id, opponentsOf = null) {
     if (st.players.some((p) => mine.has(p))) return st;
   }
   no("That's not one of your games", 403);
+}
+
+/**
+ * "Until I'm back": the AutoPlay ends the next time that player opens the game (a fresh load, at least a minute after
+ * they switched it on). Returns how many goes GuffBot played for them, or null.
+ */
+export async function welcomeBack(env, st, pid) {
+  const ap = st.auto && st.auto[pid];
+  if (!ap || ap.left != null || now() - ap.set < 60000) return null;
+  delete st.auto[pid];
+  try { await save(env, st); } catch (e) { if (!(e instanceof Refusal)) throw e; return null; }
+  return ap.played || 0;
 }
 
 /** Load, act, save. Returns { st, before } so the caller can send notifications after replying. */

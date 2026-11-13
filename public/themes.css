@@ -134,3 +134,5 @@ html[data-theme="clean"] .lookfoot { color: var(--soft); }
 html[data-theme="clean"] .soft, html[data-theme="clean"] .talkbox .room { color: var(--soft); }
 html[data-theme="clean"] .evlog li.burn { color: #C2410C; }
 html[data-theme="britpop"] .soft { color: #D6DEF2; }
+html[data-theme="clean"] .automenu { background: #fff; box-shadow: 0 10px 30px rgba(16, 24, 40, .18); }
+html[data-theme="clean"] .myhead .autobtn.on { color: #fff; }

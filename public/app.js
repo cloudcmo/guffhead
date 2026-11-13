@@ -222,7 +222,7 @@ function paper(seed) {
 /* ---------- routing ---------- */
 function route() {
   clearInterval(S.poll); S.poll = 0;
-  document.body.classList.remove("fit"); S.sheet = false;
+  document.body.classList.remove("fit"); S.sheet = false; S.autoMenu = false;
   const h = location.hash || "#/";
   const gm = h.match(/^#\/(game|replay)\/([a-z0-9]{6})/);
   paper(gm ? seedOf(gm[2]) : BAR_SEED);
@@ -642,6 +642,7 @@ async function openGame(id, quiet) {
   const mineAt = [...S.evs].reverse().find((e) => e.p === S.me.id && !e.auto && !e.autopilot && ["play", "pickup", "flip", "ready"].includes(e.k));
   const last = Math.max(Number(store.get(seenKey(id)) || 0), mineAt ? mineAt.seq : 0, r.game.g.seq - 20);
   show(r.game, last);
+  if (r.autoBack != null) toast(r.autoBack ? `Welcome back. GuffBot played ${r.autoBack === 1 ? "one go" : `${r.autoBack} goes`} for you, and AutoPlay is off.` : "Welcome back. AutoPlay is off.");
   schedulePoll();
 }
 function schedulePoll() {
@@ -684,7 +685,7 @@ async function doAct(body) {
     S.moment = rareMoment(S.evs.filter((e) => e.seq > before));
     S.busy = false;
     show(r.game, before, true);
-    if (body.act !== "setup") offerNext(G.id);
+    if (body.act !== "setup" && body.act !== "autoplay") offerNext(G.id);
   } catch (e) {
     S.busy = false;
     toast(e.message);
@@ -951,7 +952,7 @@ function oppPod(G, p, turnId, nextId) {
   const hand = typeof p.hand === "number" ? p.hand : p.hand.length;
   const here = S.here.includes(p.id);
   const busy = S.doing[p.id];
-  const status = p.out ? "" : p.id === turnId ? `<small class="podstatus go">${here && busy === "picking" ? "Picking…" : "Their go"}</small>` : here ? `<small class="podstatus">looking 👀</small>` : p.id === nextId ? `<small class="podstatus next">Next</small>` : "";
+  const status = p.out ? "" : G.auto && G.auto[p.id] ? `<small class="podstatus auto">🤖 AutoPlay</small>` : p.id === turnId ? `<small class="podstatus go">${here && busy === "picking" ? "Picking…" : "Their go"}</small>` : here ? `<small class="podstatus">looking 👀</small>` : p.id === nextId ? `<small class="podstatus next">Next</small>` : "";
   const turn = p.id === turnId;
   const known = (p.known || []).slice();
   const out = p.out ? `<span class="outbadge">${p.out === 1 ? "Out first" : "Out"}</span>` : "";
@@ -987,12 +988,26 @@ function myArea(G, me, turnId) {
   const prepick = G.status === "playing" && G.g.phase === "play" && !me.out && !G.myGo && zone === "hand";
   if (myGo) S.sel = S.sel.filter((c) => playable.has(c));
   const waiting = G.status === "playing" && G.g.phase === "play" && !me.out && !myGo;
+  const ap = G.auto && G.auto[me.id];
+  const canAuto = G.status === "playing" && G.g.phase === "play" && !me.out && !G.watching;
   return `<div class="mine${myGo ? " turn" : ""}${waiting ? " waiting" : ""}${me.out ? " isout" : ""}">
-    <div class="myhead">${headOf(me.id, 34, wears(G, me.id), S.drop && wears(G, me.id))}<b>You</b>${me.out ? `<span class="outbadge">${me.out === 1 ? "Out first" : "Out"}</span>` : ""}${wears(G, me.id) && G.status === "playing" ? `<small class="soft">💩 from last time</small>` : ""}</div>
+    <div class="myhead">${headOf(me.id, 34, wears(G, me.id), S.drop && wears(G, me.id))}<b>You</b>${me.out ? `<span class="outbadge">${me.out === 1 ? "Out first" : "Out"}</span>` : ""}${wears(G, me.id) && G.status === "playing" ? `<small class="soft">💩 from last time</small>` : ""}${canAuto ? `<button class="chip autobtn${ap ? " on" : ""}" id="autoBtn" aria-expanded="${!!S.autoMenu}">🤖 ${ap ? "On" : "Auto"}</button>` : ""}</div>
+    ${canAuto && S.autoMenu && !ap ? autoMenu() : ""}
+    ${canAuto && ap ? `<p class="autoline">🤖 ${ap.left == null ? "GuffBot's playing for you until you're back." : ap.left === 1 ? "GuffBot's got your next go." : `GuffBot's got your next ${ap.left} goes.`} <button class="linkish" data-auto="off">Stop</button></p>` : ""}
     <div class="mytable">${tableStack(me, "sm", s, { tapUp: myGo && zone === "up", tapDown: myGo && zone === "down" })}</div>
     ${prepick && S.sel.length ? `<p class="prepicked">Picked for your go. It'll be played only if it still goes, and only when you tap Play.</p>` : ""}
     <div class="hand" id="hand">${hand.length ? hand.map((c) => card(c, { size: "md", tap: myGo || prepick, sel: S.sel.includes(c), dim: myGo && !playable.has(c), s })).join("") : me.out ? `<p class="soft">You're out. ${G.status === "playing" ? "Sit back and enjoy the show." : ""}</p>` : `<p class="soft small">${zone === "up" ? "Hand's empty: play from your face-up cards." : zone === "down" ? "Blind now: tap a face-down card." : ""}</p>`}</div>
   </div>`;
+}
+
+/** AutoPlay (Carl, 13 Nov 2026): let GuffBot play for you for a go, three goes, or until you open the game again. */
+function autoMenu() {
+  return `<div class="automenu" role="menu"><b>Let GuffBot play for you</b>
+    <button class="btn gold" data-auto="1">Just my next go</button>
+    <button class="btn gold" data-auto="3">My next 3 goes</button>
+    <button class="btn gold" data-auto="back">Until I'm back</button>
+    <small>He plays with Ms GuffBot's brain, and stops the moment you play a card yourself.</small>
+    <button class="linkish" id="autoCancel">Cancel</button></div>`;
 }
 
 /** Whose go it is, big, in one place, right above your cards (Carl, 11 Nov 2026: "Sometimes I think it's my go but it
@@ -1022,6 +1037,7 @@ function turnBanner(G, turnId) {
     wait = between.length === 0 ? "You're next" : `Then ${between.map((id) => esc(nameOf(id))).join(", then ")}, then you`;
   } else if (me && me.out) wait = "You're out: sit back and enjoy it";
   const who = isHouse(turnId) ? `${esc(nameOf(turnId))}'s thinking…` : `${esc(nameOf(turnId))}'s go`;
+  if (G.auto && G.auto[turnId]) wait = `GuffBot's playing for ${esc(nameOf(turnId))} · ${wait}`;
   const here = S.here.includes(turnId) && !isHouse(turnId);
   const busy = here && S.doing && S.doing[turnId] === "picking";
   const last = lastLine(G);
@@ -1291,6 +1307,18 @@ function wireGame() {
   if ($("playBtn")) $("playBtn").onclick = () => playSelected();
   wireDrag();
   app.querySelectorAll("[data-tab4]").forEach((b) => (b.onclick = () => { S.tab = b.dataset.tab4; if (S.tab === "chat") markRead(); renderGame(); }));
+  if ($("autoBtn")) $("autoBtn").onclick = () => {
+    const G = S.G;
+    if (G.auto && G.auto[S.me.id]) { doAct({ act: "autoplay", off: true }); return; }
+    S.autoMenu = !S.autoMenu; renderGame();
+  };
+  if ($("autoCancel")) $("autoCancel").onclick = () => { S.autoMenu = false; renderGame(); };
+  app.querySelectorAll("[data-auto]").forEach((b) => (b.onclick = () => {
+    S.autoMenu = false;
+    const v = b.dataset.auto;
+    doAct(v === "off" ? { act: "autoplay", off: true } : { act: "autoplay", n: v === "back" ? "back" : Number(v) });
+    if (v !== "off") toast(v === "back" ? "GuffBot's got it until you're back." : v === "1" ? "GuffBot's got your next go." : "GuffBot's got your next 3 goes.");
+  }));
   const openSheet = (tab) => { S.tab = tab; S.sheet = true; if (tab === "chat") markRead(); renderGame(); if (tab === "chat") setTimeout(() => { const i = $("chatText"); if (i) i.focus(); }, 250); };
   app.querySelectorAll("[data-sheet]").forEach((b) => (b.onclick = () => openSheet(b.dataset.sheet)));
   const shut = () => { S.sheet = false; renderGame(); };

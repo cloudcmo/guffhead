@@ -97,4 +97,40 @@ for (let k = 0; k < 150; k++) {
   assert.deepEqual(autopilot(st, st.lastAct + 1000 * 3600000, rnd), []);
   checks++;
 }
+// AutoPlay (13 Nov 2026): one go, three goes, until you're back; playing a card yourself switches it off
+for (let k = 0; k < 40; k++) {
+  const st = newTable(["carl", "nick"], { carl: "Carl", nick: "Nick" }, { idleHours: 0 }, rnd);
+  st.id = "autopl";
+  runHouse(st, rnd);
+  for (const id of ["carl", "nick"]) { const v = viewFor(st, id); perform(st, id, { act: "ready", up: chooseUp(v.six, st.settings) }, rnd, new Set()); }
+  const n = k % 3 === 0 ? 1 : k % 3 === 1 ? 3 : "back";
+  perform(st, "carl", { act: "autoplay", n }, rnd, new Set(["carl", "nick"]));
+  const carlGoes = () => st.g.events.filter((e) => e.p === "carl" && e.autopilot && ["play", "pickup", "flip"].includes(e.k)).length;
+  // Nick plays for himself; every one of Carl's goes is GuffBot's until the AutoPlay runs out
+  let guard = 0;
+  while (st.status === "playing" && guard++ < 400) {
+    const id = required(st)[0];
+    if (id === "carl") break;   // AutoPlay's run out and it's Carl's own go again
+    perform(st, "nick", { ...choose(st.g, "guffbot", rnd), seq: st.g.seq }, rnd, new Set(["carl", "nick"]));
+  }
+  if (st.status === "playing") {
+    if (n === "back") assert.fail("until you're back never hands the go back by itself");
+    assert.ok(carlGoes() >= 1 && carlGoes() <= n, `AutoPlay ${n}: GuffBot played ${carlGoes()} of Carl's goes`);
+    assert.ok(!st.auto.carl, "and it's switched off");
+  } else if (n === "back") assert.ok(carlGoes() >= 1, "GuffBot played for Carl until the end");
+  checks++;
+}
+{
+  // playing for yourself switches it off
+  const st = newTable(["carl", "nick"], { carl: "Carl", nick: "Nick" }, { idleHours: 0 }, rnd);
+  runHouse(st, rnd);
+  for (const id of ["carl", "nick"]) { const v = viewFor(st, id); perform(st, id, { act: "ready", up: chooseUp(v.six, st.settings) }, rnd, new Set()); }
+  const other = required(st)[0] === "carl" ? "nick" : "carl";
+  perform(st, other, { act: "autoplay", n: "back" }, rnd, new Set(["carl", "nick"]));
+  assert.ok(st.auto[other]);
+  perform(st, other, { act: "autoplay", off: true }, rnd, new Set(["carl", "nick"]));
+  assert.ok(!st.auto[other], "Stop switches it off");
+  assert.throws(() => perform(st, other, { act: "autoplay", n: 7 }, rnd, new Set()), /three/);
+  checks++;
+}
 console.log(`game: ${checks} checks ok (150 whole games against the house: never kept waiting, never left a forced move)`);

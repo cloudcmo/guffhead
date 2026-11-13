@@ -28,7 +28,7 @@
  * The cron (wrangler.toml) runs the idle timer: GuffBot plays the go of anyone who's left it too long.
  */
 
-import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, sweep, nudge, doing, doingAt, logbook, goodNews, makeInvite, inviteInfo, joinInvite, newGuest, Refusal } from "./game.js";
+import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, welcomeBack, sweep, nudge, doing, doingAt, logbook, goodNews, makeInvite, inviteInfo, joinInvite, newGuest, Refusal } from "./game.js";
 import { BOTS } from "../public/bot.js";
 import { DEFAULTS } from "../public/rules.js";
 import { sha256, randomToken, findPlayer, opponentsOf, looksFor, setDress } from "./people.js";
@@ -181,6 +181,7 @@ async function api(request, env, ctx, path, url) {
     const before = await lazyAutopilot(env, st, here ? who.id : null);
     if (before) later(ctx, notify(env, st, before));
     const since = Math.max(0, Number(url.searchParams.get("since") || 0));
+    const autoBack = player && !since ? await welcomeBack(env, st, who.id) : null;
     const chatSince = Math.max(0, Number(url.searchParams.get("chat") || 0));
     if (here && before) await seen(env, st.id, who.id, st.g.seq);
     const [pres, chat, busy] = await Promise.all([
@@ -189,7 +190,7 @@ async function api(request, env, ctx, path, url) {
       doingAt(env, st.id),
     ]);
     delete busy[who.id];
-    return json({ build: BUILD, note: BUILD_NOTE, game: viewFor(st, who.id, since), here: hereNow(pres).filter((p) => p !== who.id), doing: busy, chat: chat.results.reverse(), looks: since ? undefined : await looksFor(env, st.players) });
+    return json({ build: BUILD, note: BUILD_NOTE, game: viewFor(st, who.id, since), autoBack, here: hereNow(pres).filter((p) => p !== who.id), doing: busy, chat: chat.results.reverse(), looks: since ? undefined : await looksFor(env, st.players) });
   }
   mm = path.match(/^\/api\/games\/([a-z0-9]{6})\/act$/);
   if (mm && m === "POST") {
