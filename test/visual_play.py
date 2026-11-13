@@ -13,7 +13,7 @@ with sync_playwright() as p:
     pg.goto(BASE + "/"); pg.fill("#name", "steve"); pg.fill("#pin", "3456"); pg.click("button[type=submit]")
     pg.wait_for_selector(".lobby")
     pg.click("[data-crew=guffbot]"); pg.wait_for_timeout(150); pg.click("[data-crew=msguffbot]"); pg.wait_for_timeout(150)
-    pg.click("#deal"); pg.wait_for_selector("#readyBtn"); pg.click("#readyBtn")
+    pg.click("#deal"); pg.wait_for_selector("#skipDeal"); pg.click("#skipDeal"); pg.wait_for_selector("#botPick"); pg.click("#botPick"); pg.click("#readyBtn")
     shot_stage = shot_table = False
     for i in range(400):
         pg.wait_for_timeout(250)

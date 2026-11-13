@@ -705,3 +705,59 @@ body.fit .sign { padding-top: 3px; padding-bottom: 3px; }
 .autoline { margin: 2px 0 0 92px; font-weight: 800; font-size: .9rem; color: var(--good); }
 .autoline .linkish { font-size: .9rem; margin-left: 4px; }
 .podstatus.auto { color: var(--good); }
+
+/* ---------- the deal, the bubbles and the new swap (13 Nov 2026) ---------- */
+.deal { display: flex; flex-direction: column; gap: 12px; align-items: center; padding-top: 4px; }
+.deal .patter { margin: 0; }
+.dopps { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; width: 100%; }
+.dseat { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 96px; padding: 8px; border-radius: 14px; background: rgb(var(--panel-rgb) / .82); }
+.dseat .avatar { border-radius: 50%; background: var(--paper); }
+.dstack { position: relative; width: 40px; height: 56px; border-radius: 6px; border: 2px dashed rgb(var(--accent-rgb) / .35); display: grid; place-items: center; }
+.dstack.has { border: 0; background: repeating-linear-gradient(45deg, transparent 0 5px, rgba(255, 255, 255, .15) 5px 6px), var(--green); box-shadow: 2px 2px 0 rgba(0, 0, 0, .3), 4px 4px 0 rgba(0, 0, 0, .2); }
+.dcount { font: 900 1rem var(--body); color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .8); }
+.dstack:not(.has) .dcount { opacity: 0; }
+.dtable { width: 100%; height: 110px; display: grid; place-items: center; border-radius: 18px; background: radial-gradient(var(--wood2), var(--wood) 60%, var(--wood3)); box-shadow: inset 0 0 0 3px rgb(var(--accent-rgb) / .25); }
+.ddeck { position: relative; width: 54px; height: 76px; }
+.ddeck .card { position: absolute; left: 0; top: 0; }
+.ddeck .card:nth-child(2) { transform: translate(-2px, -2px); }
+.ddeck .card:nth-child(3) { transform: translate(-4px, -4px); }
+.dme { width: 100%; padding: 10px; border-radius: 14px; background: rgb(var(--panel-rgb) / .82); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.dme > p { margin: 4px 0 0; }
+.dmehead { display: flex; align-items: center; gap: 8px; align-self: flex-start; }
+.dmehead .avatar { border-radius: 50%; background: var(--paper); }
+.ddown, .dsix { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.dslot { --w: 54px; width: var(--w); height: calc(var(--w) * 1.42); border-radius: 6px; border: 2px dashed rgb(var(--accent-rgb) / .3); display: inline-block; }
+.dslot:has(.card) { border: 0; }
+.dslot.flipin .card { animation: flipIn .35s ease-out; }
+.dslot.good .card { box-shadow: 0 0 0 3px #F4D36B, 0 0 16px rgba(244, 211, 107, .8); }
+@keyframes flipIn { from { transform: rotateY(90deg); } to { transform: none; } }
+.flyer { position: fixed; z-index: 80; pointer-events: none; }
+.bubble { position: fixed; z-index: 90; pointer-events: none; max-width: 220px; padding: 7px 12px; border-radius: 16px; background: #FFFDF6; color: #1D1A16;
+  font: 900 1rem/1.2 var(--body); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); animation: bubbleIn .25s cubic-bezier(.2, 1.6, .4, 1); transition: opacity .3s, transform .3s; }
+.bubble::after { content: ""; position: absolute; left: 50%; bottom: -8px; margin-left: -8px; border: 8px solid transparent; border-top-color: #FFFDF6; border-bottom: 0; }
+.bubble.good { background: #FFF1B8; } .bubble.good::after { border-top-color: #FFF1B8; }
+.bubble.bad { background: #E6F4FF; } .bubble.bad::after { border-top-color: #E6F4FF; }
+.bubble.gone { opacity: 0; transform: translateY(-8px); }
+@keyframes bubbleIn { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .bubble { animation: none; } }
+/* choosing your face-up three */
+.swap.choose .sorting { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 4px 0 8px; }
+.sorter { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; border-radius: 999px; background: rgb(var(--panel-rgb) / .82); }
+.sorter .avatar { border-radius: 50%; background: var(--paper); }
+.sorter small { color: var(--soft); font-weight: 700; }
+.blindbox, .handbox { margin: 0 0 10px; }
+.blindbox h3, .handbox h3 { margin: 0 0 4px; }
+.blindbox > p { margin: 0 0 10px; }
+.blinds { display: flex; gap: 14px; justify-content: center; }
+.bslot { position: relative; padding: 0 0 12px 8px; }
+.bslot .ontop { position: absolute; left: 0; top: 12px; cursor: pointer; }
+.bslot .ontop.landed .card { animation: landOn .3s cubic-bezier(.2, 1.4, .4, 1); }
+.bslot .hole { position: absolute; left: 0; top: 12px; width: 74px; height: calc(74px * 1.42); display: grid; place-items: center; border-radius: 7px; border: 3px dashed var(--gold); color: var(--gold-hi); font: 900 1.6rem var(--body); background: rgb(var(--panel-rgb) / .55); }
+@keyframes landOn { from { transform: translateY(40px) scale(.9); opacity: .4; } to { transform: none; opacity: 1; } }
+.handbox .sixcards { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.handbox .sixcards > span { cursor: pointer; }
+.handbox .card.kept { cursor: default; }
+.swap.choose .actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+@media (max-width: 380px) { .bslot .hole { width: 66px; height: calc(66px * 1.42); } .blinds { gap: 10px; } }
+.dsix .dslot { --w: 48px; }
+.dsix { gap: 5px; flex-wrap: nowrap; }

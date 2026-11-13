@@ -875,6 +875,7 @@ function renderGame(staging = false) {
   renderChat();
   fitHand();
   if (!staging) { bringMyGoIntoView(G); startIdle(G); }
+  if (fit && !staging && !S.playing) revealReactions(G);
 }
 /** Who's wearing what tonight, in the pub's own words. */
 function clobber(G) {
@@ -956,7 +957,7 @@ function oppPod(G, p, turnId, nextId) {
   const turn = p.id === turnId;
   const known = (p.known || []).slice();
   const out = p.out ? `<span class="outbadge">${p.out === 1 ? "Out first" : "Out"}</span>` : "";
-  return `<div class="pod${turn ? " turn" : ""}${p.out ? " isout" : ""}${G.loser === p.id ? " guffhead" : ""}">
+  return `<div class="pod${turn ? " turn" : ""}${p.out ? " isout" : ""}${G.loser === p.id ? " guffhead" : ""}" data-pid="${p.id}">
     <div class="podhead"><span class="podav">${headOf(p.id, 34, wears(G, p.id), S.drop && wears(G, p.id))}<b class="handbadge${hand ? "" : " none"}" title="${hand} in hand">${hand}</b></span><span class="podname">${esc(nameOf(p.id))}${here ? `<i class="dot" title="At the table now"></i>` : ""}${status}</span>${out}</div>
     <div class="podcards">
       <span class="tablecards">${tableStack(p, "op", G.settings)}</span>
@@ -1450,40 +1451,192 @@ const aCardName = (c) => `${c[0] === "A" || c[0] === "8" ? "an" : "a"} ${cardNam
 /** Tell the table what you're up to: picking cards (shown to the others as "picking cards…"). */
 function tellDoing() { S.doingDirty = true; }
 
-/* ---------- the swap: pick your face-up three ---------- */
+/* ---------- the deal and the swap (Carl, 13 Nov 2026: "we are missing a bit of theatre at the start of a game. I think we
+   should see the dealing of cards... speech bubbles saying ooh and ah... lol and snigger... you should manually
+   choose which three cards are going to go onto your blind pile") ---------- */
+const pickOne = (a) => a[Math.floor(Math.random() * a.length)];
+const calm = () => window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const dealtKey = (id) => `gh-dealt-${id}`;
+/** Is this card good news, bad news or neither, under this table's rules? */
+function cardMood(c, s) {
+  const r = c[0];
+  if (r === "3" && s.three === "invisible") return "good";
+  if (["A", "K", "Q", "J", "T"].includes(r)) return "good";
+  if (r === "2") return s.twoReset ? "good" : "bad";
+  if (["3", "4", "5"].includes(r)) return "bad";
+  return "";
+}
+const OOH = { A: ["Ooh, an ace!", "Aah, an ace.", "An ace! Lovely."], K: ["Ooh, a king.", "Aah!", "Get in!"], Q: ["Ooh!", "A queen. Lovely.", "Aah!"],
+  J: ["Ooh, a jack.", "Not bad!", "Aah!"], T: ["A 10! Burner.", "Ooh, a 10.", "Lovely, a 10."], 2: ["A 2! Handy.", "Ooh, a 2.", "Aah, a 2."], 3: ["Ooh, a sneaky 3."] };
+const LOL = ["lol", "Snigger.", "Hehe.", "Unlucky!", "Bless.", "Ha!", "Oh dear.", "lol, a {c}", "A {c}. Bless."];
+const JAMMY = ["Jammy.", "Typical.", "Lucky so-and-so."];
+function bubble(el, text, kind = "") {
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const b = document.createElement("div");
+  b.className = `bubble ${kind}`;
+  b.textContent = text;
+  document.body.appendChild(b);
+  const w = b.offsetWidth;
+  b.style.left = `${Math.max(6, Math.min(window.innerWidth - w - 6, r.left + r.width / 2 - w / 2))}px`;
+  b.style.top = `${Math.max(6, r.top - b.offsetHeight - 6)}px`;
+  setTimeout(() => b.classList.add("gone"), 1250);
+  setTimeout(() => b.remove(), 1600);
+}
+
+/** The deal, played out: three face-down each, then six each; yours land face up, and the table reacts. */
+async function renderDeal(G) {
+  const s = G.settings;
+  const six = (G.six || []).slice();
+  const seats = G.g.seats;
+  const meAt = seats.findIndex((p) => p.id === S.me.id);
+  const order = seats.map((_, i) => seats[(meAt + 1 + i) % seats.length].id);   // start on my left, finish with me
+  const others = order.filter((id) => id !== S.me.id);
+  S.dealing = G.id;
+  $("app").innerHTML = `
+    <section class="deal">
+      <p class="patter loud">Dealing…</p>
+      <div class="dopps">${others.map((id) => `<div class="dseat" data-pid="${id}">${headOf(id, 40, wears(G, id))}<b>${esc(nameOf(id))}</b><div class="dstack"><span class="dcount">0</span></div></div>`).join("")}</div>
+      <div class="dtable"><div class="ddeck">${back({ size: "md" })}${back({ size: "md" })}${back({ size: "md" })}</div></div>
+      <div class="dme" data-pid="${S.me.id}">
+        <div class="dmehead">${headOf(S.me.id, 40, wears(G, S.me.id))}<b>You</b></div>
+        <p class="small soft">Your blind cards</p>
+        <div class="ddown">${[0, 1, 2].map((i) => `<span class="dslot md" data-dd="${i}"></span>`).join("")}</div>
+        <p class="small soft">Your six</p>
+        <div class="dsix">${six.map((_, i) => `<span class="dslot md" data-ds="${i}"></span>`).join("")}</div>
+      </div>
+      <button class="btn ghost" id="skipDeal">Skip the deal</button>
+    </section>`;
+  let stop = false;
+  const done = () => { if (S.dealing !== G.id) return; S.dealing = null; store.set(dealtKey(G.id), 1); if (S.G && S.G.id === G.id && location.hash === `#/game/${G.id}`) renderGame(); };
+  $("skipDeal").onclick = () => { stop = true; done(); };
+  const deck = document.querySelector(".ddeck");
+  const fly = (target, onLand) => {
+    if (!target || !deck) { onLand && onLand(); return; }
+    const a = deck.getBoundingClientRect(), b = target.getBoundingClientRect();
+    const f = document.createElement("span");
+    f.className = "flyer";
+    f.innerHTML = back({ size: "md" });
+    f.style.left = `${a.left}px`; f.style.top = `${a.top}px`;
+    document.body.appendChild(f);
+    const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
+    const k = Math.min(1.2, b.width / a.width || 1);
+    const anim = f.animate([{ transform: "translate(0,0) rotate(0deg) scale(1)" }, { transform: `translate(${dx}px, ${dy}px) rotate(${(Math.random() * 16 - 8).toFixed(1)}deg) scale(${k})` }], { duration: 340, easing: "cubic-bezier(.3,.7,.3,1)" });
+    anim.onfinish = () => { f.remove(); onLand && onLand(); };
+  };
+  const seatEl = (id) => document.querySelector(`.dseat[data-pid="${id}"]`);
+  const addTo = (id) => { const el = seatEl(id); if (!el) return; const n = el.querySelector(".dcount"); n.textContent = Number(n.textContent) + 1; el.querySelector(".dstack").classList.add("has"); };
+  let lastBubble = 0;
+  const react = (c, slot) => {
+    const mood = cardMood(c, s);
+    if (!mood || Date.now() - lastBubble < 380) return;
+    lastBubble = Date.now();
+    const r = c[0] === "T" ? "T" : c[0];
+    if (mood === "good") {
+      bubble(document.querySelector(".dmehead"), pickOne(OOH[r] || OOH.K), "good");
+      if (others.length && Math.random() < 0.25) setTimeout(() => bubble(seatEl(pickOne(others)), pickOne(JAMMY)), 450);
+    } else if (others.length) {
+      bubble(seatEl(pickOne(others)), pickOne(LOL).replace("{c}", RANK[c[0]] || c[0]), "bad");
+    }
+    if (slot) slot.classList.add(mood);
+  };
+  const gap = 150;
+  // three face-down each
+  for (let round = 0; round < 3 && !stop; round++) {
+    for (const id of order) {
+      if (stop) break;
+      if (id === S.me.id) { const slot = document.querySelector(`[data-dd="${round}"]`); fly(slot, () => { if (slot) slot.innerHTML = back({ size: "md" }); snap(); }); }
+      else fly(seatEl(id) && seatEl(id).querySelector(".dstack"), () => addTo(id));
+      await sleep(gap);
+    }
+  }
+  // then six each: mine land face up
+  for (let round = 0; round < 6 && !stop; round++) {
+    for (const id of order) {
+      if (stop) break;
+      if (id === S.me.id) {
+        const c = six[round], slot = document.querySelector(`[data-ds="${round}"]`);
+        if (c) fly(slot, () => { if (!slot) return; slot.innerHTML = card(c, { size: "md", s }); slot.classList.add("flipin"); snap(); react(c, slot); });
+      } else fly(seatEl(id) && seatEl(id).querySelector(".dstack"), () => addTo(id));
+      await sleep(gap);
+    }
+  }
+  if (stop) return;
+  await sleep(1300);
+  done();
+}
+
+/** Pick your face-up three: they go on top of your blind cards, and the other three are your starting hand. */
 function renderSwap(G) {
+  if (S.dealing === G.id) return;   // the deal's still going: leave it be
+  if (!store.get(dealtKey(G.id)) && !calm() && (G.six || []).length === 6) { renderDeal(G); return; }
   const s = G.settings;
   const six = G.six || [];
-  const me = G.g.seats.find((p) => p.id === S.me.id);
-  if (!S.six || S.six.key !== G.id) S.six = { key: G.id, up: (G.suggest && G.suggest.length === 3 ? G.suggest : me.up).slice(), suggested: !!G.suggest };
-  const up = S.six.up;
+  if (!S.six || S.six.key !== G.id) S.six = { key: G.id, up: [] };
+  const up = S.six.up.filter((c) => six.includes(c));
+  S.six.up = up;
+  const hand = sortCards(six.filter((c) => !up.includes(c)), s);
   const names = namesFor(G);
+  const others = G.g.seats.filter((p) => p.id !== S.me.id);
   const waiting = G.required.filter((p) => p !== S.me.id);
+  const fresh = S.six.fresh; S.six.fresh = null;
   $("app").innerHTML = `
-    <section class="game swap">
+    <section class="game swap choose">
       <div class="status"><p class="patter loud">${esc(say("swap", seedOf(G.id)))}</p></div>
-      <div id="presence">${presenceHtml()}</div>
-      <p class="small">${S.six.suggested && sameSet(S.six.up, G.suggest || []) ? "GuffBot has picked your best three to go face up. Tap Ready, or tap cards to change them." : "Tap three cards to go face up, on top of your three face-down cards. The other three are your starting hand."}</p>
-      <div class="sixcards">${six.map((c) => card(c, { size: "lg", tap: true, sel: up.includes(c), s })).join("")}</div>
-      <div class="swapview">
-        <div><h3>Face up</h3><div class="row">${up.length ? sortCards(up, s).map((c) => card(c, { size: "sm", s })).join("") : `<span class="soft small">None yet</span>`}</div></div>
-        <div><h3>In hand</h3><div class="row">${sortCards(six.filter((c) => !up.includes(c)), s).map((c) => card(c, { size: "sm", s })).join("")}</div></div>
+      <div class="sorting">${others.map((p) => `<span class="sorter">${headOf(p.id, 28, wears(G, p.id))}<b>${esc(nameOf(p.id))}</b><small>${waiting.includes(p.id) ? "choosing…" : "ready ✓"}</small></span>`).join("")}</div>
+      <div class="card-panel blindbox">
+        <h3>Your blind cards</h3>
+        <p class="small">Nobody sees these, you included. Put three of your cards face up on top of them: you'll play those once your hand has gone, before the blind ones.</p>
+        <div class="blinds">${[0, 1, 2].map((i) => `<div class="bslot">${back({ size: "lg" })}${up[i] ? `<span class="ontop${fresh === up[i] ? " landed" : ""}" data-take="${up[i]}" role="button" tabindex="0" aria-label="Take back ${cardName(up[i])}">${card(up[i], { size: "lg", s })}</span>` : `<span class="hole">${i + 1}</span>`}</div>`).join("")}</div>
       </div>
-      ${S.tips ? `<p class="hint">🎓 Most people put their highest cards and their ${s.tenBurn ? "10s" : ""}${s.tenBurn && s.twoReset ? " and " : ""}${s.twoReset ? "2s" : ""} face up, and keep low cards in hand to get rid of early.</p>` : ""}
-      <div class="actions"><button class="btn gold big" id="readyBtn"${up.length === 3 ? "" : " disabled"}>${up.length === 3 ? "Ready" : `Pick ${3 - up.length} more`}</button></div>
-      <p class="small soft">${waiting.length ? `Also sorting: ${esc(waiting.map((p) => names[p]).join(", "))}.` : "Everyone else is ready."}</p>
+      <div class="card-panel handbox">
+        <h3>${up.length < 3 ? `Tap ${up.length ? `${3 - up.length} more` : "three cards"} to put face up` : "Your starting hand"}</h3>
+        <div class="sixcards">${hand.map((c) => `<span data-put="${c}" role="button" tabindex="0" aria-label="Put ${cardName(c)} face up">${card(c, { size: "lg", s, cls: up.length < 3 ? "" : "kept" })}</span>`).join("")}</div>
+        ${up.length ? `<p class="small soft">Tap a face-up card to take it back.</p>` : ""}
+      </div>
+      ${S.tips ? `<p class="hint">🎓 Most people put their highest cards${s.tenBurn ? ", 10s" : ""}${s.twoReset ? " and 2s" : ""} face up, and keep low cards in hand to get rid of early.</p>` : ""}
+      <div class="actions">
+        <button class="btn gold big" id="readyBtn"${up.length === 3 ? "" : " disabled"}>${up.length === 3 ? "Ready" : `Pick ${3 - up.length} more`}</button>
+        ${G.suggest && G.suggest.length === 3 && !sameSet(up, G.suggest) ? `<button class="btn ghost" id="botPick">Let GuffBot pick</button>` : ""}
+      </div>
+      <p class="small soft">${waiting.length ? `Still choosing: ${esc(waiting.map((p) => names[p]).join(", "))}.` : "Everyone else is ready."}</p>
       <details class="log"><summary>This table's house rules</summary><ul class="rulelist">${describeRules(s).map(([k, v]) => `<li><b>${esc(k)}</b> ${esc(v)}</li>`).join("")}</ul></details>
-      <p class="foot"><a href="#/">Back to the bar</a></p>
+      <p class="foot"><a href="#/">Back to the bar</a> · <button class="linkish" id="redeal">Watch the deal again</button></p>
     </section>`;
-  $("app").querySelectorAll("[data-card]").forEach((el) => (el.onclick = () => {
-    const c = el.dataset.card;
-    const u = S.six.up;
-    if (u.includes(c)) S.six.up = u.filter((x) => x !== c);
-    else if (u.length < 3) S.six.up = [...u, c];
-    else { S.six.up = [...u.slice(1), c]; }
-    renderSwap(G);
+  const app = $("app");
+  app.querySelectorAll("[data-put]").forEach((el) => (el.onclick = () => {
+    if (S.six.up.length >= 3) return;
+    S.six.up = [...S.six.up, el.dataset.put]; S.six.fresh = el.dataset.put; snap(); buzz(8); tellDoing(); renderSwap(G);
   }));
+  app.querySelectorAll("[data-take]").forEach((el) => (el.onclick = () => { S.six.up = S.six.up.filter((x) => x !== el.dataset.take); tellDoing(); renderSwap(G); }));
+  if ($("botPick")) $("botPick").onclick = () => { S.six.up = G.suggest.slice(); renderSwap(G); };
+  $("redeal").onclick = () => { store.del(dealtKey(G.id)); renderSwap(G); };
   $("readyBtn").onclick = () => { if (S.six.up.length === 3) doAct({ act: "ready", up: S.six.up.slice() }); };
+}
+
+/** When play starts, the table has a look at everyone's face-up cards (once per game, per phone). */
+function revealReactions(G) {
+  const key = `gh-rev-${G.id}`;
+  if (store.get(key)) return;
+  store.set(key, 1);
+  const s = G.settings;
+  let t = 500;
+  for (const p of G.g.seats) {
+    if (p.id === S.me.id || !Array.isArray(p.up) || !p.up.length) continue;
+    const good = p.up.filter((c) => cardMood(c, s) === "good");
+    const bad = p.up.filter((c) => cardMood(c, s) === "bad");
+    const el = document.querySelector(`.pod[data-pid="${p.id}"]`);
+    let text = "", kind = "";
+    const POWER = "A2TKQJ3";
+    good.sort((a, b) => POWER.indexOf(a[0]) - POWER.indexOf(b[0]));
+    const pair = good.find((c) => good.filter((x) => x[0] === c[0]).length >= 2);
+    if (pair) { text = `Ooh, ${good.filter((x) => x[0] === pair[0]).length === 3 ? "three" : "a pair of"} ${pluralOf(pair)}!`; kind = "good"; }
+    else if (good.length) { text = `Ooh, ${aCardName(good[0])}${good.length > 1 ? " and more" : ""}!`; kind = "good"; }
+    else if (bad.length >= 2) { text = `lol, look at ${nameOf(p.id)}'s.`; kind = "bad"; }
+    if (!text) continue;
+    setTimeout(() => bubble(el, text, kind), t);
+    t += 900;
+  }
 }
 
 const sameSet = (a, b) => a.length === b.length && a.every((x) => b.includes(x));

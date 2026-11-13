@@ -25,7 +25,7 @@ with sync_playwright() as p:
     pg.click("details.rules summary"); pg.wait_for_timeout(200)
     pg.screenshot(path=f"{OUT}/3-deal.png", full_page=True)
     pg.click("#deal")
-    pg.wait_for_selector(".sixcards")
+    pg.wait_for_selector(".deal"); pg.screenshot(path=f"{OUT}/4a-deal.png"); pg.click("#skipDeal"); pg.wait_for_selector(".sixcards"); pg.click("#botPick")
     pg.wait_for_timeout(500)
     pg.screenshot(path=f"{OUT}/4-swap.png", full_page=True)
     pg.click("#readyBtn")
