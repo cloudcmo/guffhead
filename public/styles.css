@@ -837,3 +837,16 @@ body.fit .sign { padding-top: 3px; padding-bottom: 3px; }
 .hlbtns .row2 { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .btn.tvbtn { background: #0D0F14; color: #fff; border-color: #0D0F14; }
 @media (prefers-reduced-motion: reduce) { .replaytag i, .slomo, .hlfire, .hlstamp { animation: none; } }
+
+/* ---------- the casual player review (14 Nov 2026) ---------- */
+/* what to do, in words, as the banner's main line */
+.turnbar .tb-do { font-size: .98rem; font-weight: 800; line-height: 1.3; }
+.turnbar.yours .tb-do { color: #2A1E0A; }
+.turnbar .tb-last { opacity: .85; }
+/* face-up cards are locked while you still have a hand */
+.mytable { position: relative; }
+.mytable.locked .card { filter: grayscale(.6) opacity(.5); }
+.locktag { position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); white-space: nowrap; font: 800 .78rem/1 var(--body); padding: 4px 8px; border-radius: 999px; background: rgb(var(--panel-rgb) / .95); color: var(--cream); border: 1px solid rgb(var(--accent-rgb) / .35); box-shadow: 0 2px 6px rgba(0, 0, 0, .2); z-index: 2; pointer-events: none; }
+.locktag.go { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+/* the next-table nudge sits at the top on a live game, never over Play or Pick up */
+body.fit .nexttoast { top: calc(6px + env(safe-area-inset-top)); bottom: auto; }

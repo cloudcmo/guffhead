@@ -903,13 +903,15 @@ function renderGame(staging = false) {
       <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a><br><small class="soft">Tonight's wallpaper: ${esc(pickPaper(seedOf(G.id), S.theme).name.toLowerCase())}</small></p>
     </section>`;
   S.lastDir = g.dir;
+  if (fit && G.myGo) { const nt = $("nexttoast"); if (nt) nt.remove(); }
   if (staging) window.scrollTo(0, fit ? 0 : keep);
   else if (fit && window.scrollY) window.scrollTo(0, 0);
   wireGame();
   renderChat();
   fitHand();
   if (!staging) { bringMyGoIntoView(G); startIdle(G); }
-  if (fit && !staging && !S.playing) revealReactions(G);
+  // (the "Ooh, a pair of 10s!" bubbles when play starts are gone: they read as comments on a play that hadn't
+  // happened. Casual player review, 14 Nov 2026. The deal keeps its ooh and lol.)
 }
 /** Who's wearing what tonight, in the pub's own words. */
 function clobber(G) {
@@ -1031,7 +1033,7 @@ function myArea(G, me, turnId) {
     <div class="myhead">${headOf(me.id, 34, wears(G, me.id), S.drop && wears(G, me.id))}<b>You</b>${me.out ? `<span class="outbadge">${me.out === 1 ? "Out first" : "Out"}</span>` : ""}${wears(G, me.id) && G.status === "playing" ? `<small class="soft">💩 from last time</small>` : ""}${canAuto ? `<button class="chip autobtn${ap ? " on" : ""}" id="autoBtn" aria-expanded="${!!S.autoMenu}">🤖 ${ap ? "On" : "Auto"}</button>` : ""}</div>
     ${canAuto && S.autoMenu && !ap ? autoMenu() : ""}
     ${canAuto && ap ? `<p class="autoline">🤖 ${ap.left == null ? "GuffBot's playing for you until you're back." : ap.left === 1 ? "GuffBot's got your next go." : `GuffBot's got your next ${ap.left} goes.`} <button class="linkish" data-auto="off">Stop</button></p>` : ""}
-    <div class="mytable">${tableStack(me, "sm", s, { tapUp: myGo && zone === "up", tapDown: myGo && zone === "down" })}</div>
+    <div class="mytable${zone === "hand" ? " locked" : ""}">${tableStack(me, "sm", s, { tapUp: myGo && zone === "up", tapDown: myGo && zone === "down", dimUp: zone === "hand" })}${zone === "hand" && (me.up.length || me.down) ? `<span class="locktag">🔒 after your hand</span>` : zone === "up" && myGo ? `<span class="locktag go">▾ play these now</span>` : ""}</div>
     ${prepick && S.sel.length ? `<p class="prepicked">Picked for your go. It'll be played only if it still goes, and only when you tap Play.</p>` : ""}
     <div class="hand" id="hand">${hand.length ? hand.map((c) => card(c, { size: "md", tap: myGo || prepick, sel: S.sel.includes(c), dim: myGo && !playable.has(c), s })).join("") : me.out ? `<p class="soft">You're out. ${G.status === "playing" ? "Sit back and enjoy the show." : ""}</p>` : `<p class="soft small">${zone === "up" ? "Hand's empty: play from your face-up cards." : zone === "down" ? "Blind now: tap a face-down card." : ""}</p>`}</div>
   </div>`;
@@ -1054,11 +1056,8 @@ function turnBanner(G, turnId) {
   if (S.playing) return `<div class="turnbar catching"><span class="tb-main">Catching up…</span><small>Tap the table to skip ahead</small></div>`;
   if (!turnId) return "";
   if (G.myGo) {
-    const o = G.options;
-    const tip = S.tips && G.hint ? `🎓 ${G.hint.split(/(?<=\.)\s/)[0]}` : "";
-    const sub = !o ? "" : o.zone === "down" ? "Flip one of your face-down cards" : !o.plays.length ? "Nothing will go: pick up the pile" : tip || (S.sel.length ? "Tap Play when you're ready" : "Tap a card, then Play");
     const last = lastLine(G);
-    return `<div class="turnbar yours" role="status">${headOf(S.me.id, 32, wears(G, S.me.id))}<span class="tb-main">Your go</span>${last ? `<small class="tb-last">${last.html}</small>` : ""}<small>${esc(sub)}</small>${last ? last.throws : ""}</div>`;
+    return `<div class="turnbar yours" role="status">${headOf(S.me.id, 32, wears(G, S.me.id))}<span class="tb-main">Your go</span><small class="tb-do">${esc(whatToDo(G))}</small>${last ? `<small class="tb-last">${last.html}</small>${last.throws}` : ""}</div>`;
   }
   // how many goes until mine
   let wait = "";
@@ -1073,12 +1072,34 @@ function turnBanner(G, turnId) {
     }
     wait = between.length === 0 ? "You're next" : `Then ${between.map((id) => esc(nameOf(id))).join(", then ")}, then you`;
   } else if (me && me.out) wait = "You're out: sit back and enjoy it";
-  const who = isHouse(turnId) ? `${esc(nameOf(turnId))}'s thinking…` : `${esc(nameOf(turnId))}'s go`;
+  const soon = wait === "You're next";
+  const who = `${esc(nameOf(turnId))}'s go`;
+  // a friend who isn't at the table: say so, and that we'll tell you (casual player review, 14 Nov 2026: "I don't
+  // know what I'm waiting for")
+  if (me && !me.out && !isHouse(turnId) && !S.here.includes(turnId)) wait += ". We'll ping you when it's your go";
   if (G.auto && G.auto[turnId]) wait = `GuffBot's playing for ${esc(nameOf(turnId))} · ${wait}`;
   const here = S.here.includes(turnId) && !isHouse(turnId);
   const busy = here && S.doing && S.doing[turnId] === "picking";
   const last = lastLine(G);
-  return `<div class="turnbar theirs${wait === "You're next" ? " soon" : ""}" role="status">${headOf(turnId, 32, wears(G, turnId))}<span class="tb-main">${who}${here ? ` <i class="dot" title="At the table now"></i>` : ""}</span><small class="tb-wait">${busy ? "Picking cards… · " : ""}${wait}</small>${last ? `<small class="tb-last">${last.html}</small>${last.throws}` : ""}</div>`;
+  return `<div class="turnbar theirs${soon ? " soon" : ""}" role="status">${headOf(turnId, 32, wears(G, turnId))}<span class="tb-main">${who}${here ? ` <i class="dot" title="At the table now"></i>` : ""}</span><small class="tb-wait">${busy ? "Picking cards… · " : ""}${wait}</small>${last ? `<small class="tb-last">${last.html}</small>${last.throws}` : ""}</div>`;
+}
+
+/** What to do on your go, in plain words (casual player review, 14 Nov 2026: one line that says it all). */
+function whatToDo(G) {
+  const o = G.options;
+  if (!o) return "";
+  const s = G.settings;
+  if (o.zone === "down") return "Hand and face-up cards gone: flip one of your face-down cards. Pot luck!";
+  const n = G.g.pile.length;
+  const nxt = nameOf(nextAfter(G.g, G.g.turn) || "");
+  if (!o.plays.length) return `Nothing you've got will go. Pick up the pile (${n} card${n === 1 ? "" : "s"}), then it's ${nxt}'s go.`;
+  const w = needWords(G.g.pile, s);
+  const an = (x) => (/^(8|ace|Ace)/.test(x) ? "an" : "a");
+  let need = /anything/i.test(w) ? "Play any card" : /^Aces only/.test(w) ? "Play an ace" : `Play ${an(w)} ${w.replace(/^(Jack|Queen|King|Ace)/, (m) => m.toLowerCase())}`;
+  const magic = [s.twoReset && "2", s.tenBurn && "10"].filter(Boolean);
+  if (!/anything/i.test(w) && magic.length) need += ` (or a ${magic.join(" or ")})`;
+  const from = o.zone === "up" ? " from your face-up cards" : "";
+  return `${need}${from}.${o.pickUp && o.plays.length && s.pickUpAnyTime ? " Or pick up the pile." : ""}`;
 }
 
 function actionsHtml(G) {
@@ -1261,6 +1282,8 @@ function refreshPeek() {
 
 /* ---------- after your go: is another game waiting for you? (CountGuff's next-game toast) ---------- */
 async function offerNext(fromId) {
+  // against just the house your go comes straight back, so no nudge to go elsewhere (it sat over the catch-up)
+  if (S.G && S.G.id === fromId && S.G.players.every((p) => p === S.me.id || isHouse(p))) return;
   let games;
   try { games = (await api("/games")).games; } catch { return; }
   S.games = games;
