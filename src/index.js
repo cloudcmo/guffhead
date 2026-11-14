@@ -201,6 +201,17 @@ async function api(request, env, ctx, path, url) {
       if (path === "/api/admin/overview" && m === "GET") return json(await overview(env));
       if (path === "/api/admin/guest" && m === "POST") return json(await guestAction(env, (await body(request)) || {}));
       if (path === "/api/admin/game" && m === "POST") return json(await gameAction(env, (await body(request)) || {}));
+      // deal a game with any player from the admin page, them straight in, with a ping if they've switched those on
+      if (path === "/api/admin/deal" && m === "POST") {
+        const b = (await body(request)) || {};
+        const them = await findPlayer(env, String(b.id || ""));
+        if (!them || them.id === who.id) return err("No such player");
+        const bots = Array.isArray(b.bots) ? b.bots.filter((x) => ["guffbot", "msguffbot"].includes(x)) : [];
+        const withThem = async (e, pid) => { const list = await opponentsOf(e, pid); return list.find((o) => o.id === them.id) ? list : [...list, { id: them.id, name: them.name }]; };
+        const st = await createGame(env, who, { players: [them.id, ...bots], settings: b.settings }, withThem);
+        later(ctx, notify(env, st, { status: "playing", required: [who.id] }));
+        return json({ game: viewFor(st, who.id) });
+      }
     } catch (e) { if (e instanceof Refusal) throw e; return err(e.message); }
     return err("No such admin action", 404);
   }

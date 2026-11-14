@@ -47,6 +47,20 @@ async function namesFor(env, ids) {
  * Everyone a player may start a game with, as in CountGuff: league-mates in Words and Guff, plus CountGuff's links,
  * plus (Guffhead only) the guests you've invited in the last 60 days. A guest's list is just whoever invited them.
  */
+/** Anyone you've sat at a Guffhead table with in the last 60 days (Carl, 14 Nov 2026: so a game he deals a guest from
+ *  the admin page can be dealt again from either side). Bots excluded. */
+async function tablemates(env, pid) {
+  try {
+    const r = await env.DB.prepare(`SELECT DISTINCT o.player_id AS id FROM gh_game_players p JOIN gh_game_players o ON o.game_id = p.game_id JOIN gh_games g ON g.id = p.game_id
+        WHERE p.player_id = ? AND o.player_id <> ? AND o.player_id NOT IN ('guffbot', 'msguffbot') AND g.updated_at > ?`).bind(pid, pid, Date.now() - 60 * 86400000).all();
+    const ids = r.results.map((x) => x.id);
+    if (!ids.length) return [];
+    const names = await namesFor(env, ids);
+    return ids.filter((id) => names[id]).map((id) => ({ id, name: names[id], guest: isGuestId(id) || undefined }));
+  } catch { return []; }
+}
+const addMates = (out, mates) => { for (const m of mates) if (!out.find((o) => o.id === m.id)) out.push(m); return out; };
+
 export async function opponentsOf(env, pid) {
   if (isGuestId(pid)) {
     // a guest plays whoever invited them (a walk-in has nobody) and anyone they've invited themselves
@@ -56,7 +70,7 @@ export async function opponentsOf(env, pid) {
     if (g.host && g.host !== "walkin") { const names = await namesFor(env, [g.host]); out.push({ id: g.host, name: names[g.host] }); }
     const mine = await env.DB.prepare(`SELECT id, name FROM gh_guests WHERE host = ? ORDER BY created_at DESC LIMIT 12`).bind(pid).all();
     for (const x of mine.results) out.push({ id: x.id, name: x.name, guest: true });
-    return out;
+    return addMates(out, await tablemates(env, pid));
   }
   const ids = new Set();
   const league = await env.DB.prepare(
@@ -77,7 +91,7 @@ export async function opponentsOf(env, pid) {
     const gs = await env.DB.prepare(`SELECT id, name FROM gh_guests WHERE host = ? AND created_at > ? ORDER BY created_at DESC LIMIT 12`).bind(pid, Date.now() - 60 * 86400000).all();
     for (const g of gs.results) out.push({ id: g.id, name: g.name, guest: true });
   } catch {}
-  return out;
+  return addMates(out, await tablemates(env, pid));
 }
 
 /** The faces everyone chose in CountGuff (cg_avatars): { id: look }. Anyone without one gets their starter or a seeded face. */

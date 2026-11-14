@@ -2098,16 +2098,16 @@ async function renderAdmin() {
   const leaving = d.guests.filter((g) => soon(g.due)).length + d.games.filter((g) => soon(g.due)).length;
   const match = (txt) => !A.q || txt.toLowerCase().includes(A.q.toLowerCase());
   const guestCard = (g) => `<div class="arow${soon(g.due) ? " leaving" : ""}${g.keep ? " kept" : ""}">
-      <div class="amain"><b>${esc(g.name)}</b> <small class="atag">${g.kind}${g.by ? ` by ${esc(g.by)}` : ""}</small>${g.keep ? ` <small class="atag keep">kept</small>` : ""}
+      <div class="amain" data-deal="${g.id}" data-dname="${esc(g.name)}" role="button" tabindex="0"><b>${esc(g.name)}</b> <small class="atag">${g.kind}${g.by ? ` by ${esc(g.by)}` : ""}</small>${g.keep ? ` <small class="atag keep">kept</small>` : ""}
         <small>Joined ${when(g.created)} · seen ${when(g.seen)} · ${g.games} game${g.games === 1 ? "" : "s"}${g.live ? ` (${g.live} live)` : ""}${g.invitesOut ? ` · ${g.invitesOut} invite${g.invitesOut === 1 ? "" : "s"} out` : ""}</small>
         <small class="adue">${g.keep ? "Kept: never cleared" : g.due ? `Cleared ${until(g.due)} unless they play` : "Safe while they have a live game"}</small></div>
-      <div class="abtns"><button class="chip" data-g="rename" data-id="${g.id}" data-name="${esc(g.name)}">Rename</button><button class="chip" data-g="${g.keep ? "unkeep" : "keep"}" data-id="${g.id}">${g.keep ? "Unkeep" : "Keep"}</button><button class="chip danger" data-g="delete" data-id="${g.id}">Delete</button></div></div>`;
+      <div class="abtns"><button class="chip play" data-deal="${g.id}" data-dname="${esc(g.name)}">🃏 Play</button><button class="chip" data-g="rename" data-id="${g.id}" data-name="${esc(g.name)}">Rename</button><button class="chip" data-g="${g.keep ? "unkeep" : "keep"}" data-id="${g.id}">${g.keep ? "Unkeep" : "Keep"}</button><button class="chip danger" data-g="delete" data-id="${g.id}">Delete</button></div></div>`;
   const gameCard = (g) => `<div class="arow${soon(g.due) ? " leaving" : ""}">
       <div class="amain"><b>${g.players.map((p) => esc(p.name)).join(", ")}</b> <small class="atag ${g.status === "playing" ? "live" : ""}">${g.status === "playing" ? "live" : "finished"}</small>
         <small>Started ${when(g.created)} · last move ${when(g.updated)}${g.loser ? ` · 💩 ${esc(g.loser)}` : ""}</small>
         <small class="adue">${g.due ? `Cleared ${until(g.due)}${g.status === "playing" ? " unless someone moves" : ""}` : "Has a regular in it: never cleared"}</small></div>
       <div class="abtns">${g.status === "playing" ? `<a class="chip" href="#/game/${g.id}">Look</a>` : `<a class="chip" href="#/highlights/${g.id}">📺</a>`}<button class="chip danger" data-gm="delete" data-id="${g.id}">Delete</button></div></div>`;
-  const regCard = (r) => `<div class="arow"><div class="amain"><b>${esc(r.name)}</b> <small class="atag">regular</small><small>${r.games} game${r.games === 1 ? "" : "s"}${r.live ? ` (${r.live} live)` : ""} · last played ${when(r.seen)}</small><small class="adue">Shared Guff login: change it in Words and Guff, not here</small></div></div>`;
+  const regCard = (r) => `<div class="arow"><div class="amain" data-deal="${r.id}" data-dname="${esc(r.name)}" role="button" tabindex="0"><b>${esc(r.name)}</b> <small class="atag">regular</small><small>${r.games} game${r.games === 1 ? "" : "s"}${r.live ? ` (${r.live} live)` : ""} · last played ${when(r.seen)}</small><small class="adue">Shared Guff login: change it in Words and Guff, not here</small></div><div class="abtns"><button class="chip play" data-deal="${r.id}" data-dname="${esc(r.name)}">🃏 Play</button></div></div>`;
   let body = "";
   if (A.tab === "soon") {
     const gs = d.guests.filter((g) => soon(g.due)).sort((a, b) => a.due - b.due), gm = d.games.filter((g) => soon(g.due)).sort((a, b) => a.due - b.due);
@@ -2139,10 +2139,35 @@ async function renderAdmin() {
     try { const r = await api("/admin/guest", { method: "POST", body: { id, action, name } }); toast(action === "delete" ? `Deleted${r.games ? `, with ${r.games} game${r.games === 1 ? "" : "s"} only they were in` : ""}.` : action === "rename" ? `Renamed to ${r.name}.` : action === "keep" ? "Kept: the clear-out will leave them alone." : "Back to normal: cleared after 30 quiet days."); renderAdmin(); }
     catch (e) { toast(e.message); }
   }));
+  // tap anyone to deal them a game (Carl, 14 Nov 2026)
+  app.querySelectorAll("[data-deal]").forEach((b) => (b.onclick = () => dealWith(b.dataset.deal, b.dataset.dname)));
   app.querySelectorAll("[data-gm]").forEach((b) => (b.onclick = async () => {
     if (!sure(b)) return;
     try { await api("/admin/game", { method: "POST", body: { id: b.dataset.id, action: "delete" } }); toast("Game deleted."); renderAdmin(); } catch (e) { toast(e.message); }
   }));
+}
+/** Deal a game with anyone from the admin page: just the two of you, or with the house. They're straight in. */
+function dealWith(id, name) {
+  const box = document.createElement("div");
+  box.className = "howsheet";
+  let bots = [];
+  const draw = () => {
+    box.innerHTML = `<div class="howcard invcard" role="dialog" aria-label="Deal a game"><h3>🃏 Deal ${esc(name)} in</h3>
+      <p>A new game starts now with ${esc(name)} in it. It's in their tables straight away, with a ping if they've switched those on.</p>
+      <div class="chips"><button class="chip${bots.length ? "" : " on"}" data-who="two">Just the two of us</button><button class="chip${bots.length ? " on" : ""}" data-who="bots">Bring GuffBot and Ms GuffBot</button></div>
+      <div class="howbtns"><button class="linkish" data-x>Cancel</button><button class="btn gold" id="dealGo">Deal ▸</button></div></div>`;
+    box.querySelector("[data-x]").onclick = () => box.remove();
+    box.querySelectorAll("[data-who]").forEach((b) => (b.onclick = () => { bots = b.dataset.who === "bots" ? ["guffbot", "msguffbot"] : []; draw(); }));
+    const go = box.querySelector("#dealGo");
+    go.onclick = async () => {
+      go.disabled = true;
+      try { const r = await api("/admin/deal", { method: "POST", body: { id, bots } }); box.remove(); toast(`Dealt. ${name} is in.`); location.hash = `#/game/${r.game.id}`; }
+      catch (e) { toast(e.message); go.disabled = false; }
+    };
+  };
+  box.onclick = (e) => { if (e.target === box) box.remove(); };
+  draw();
+  document.body.appendChild(box);
 }
 /** A little in-page box for a new name (no browser pop-ups). */
 function askName(current) {

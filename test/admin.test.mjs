@@ -31,3 +31,11 @@ const cg = await call("/api/games", { token: carl, method: "POST", body: { playe
 assert.ok((await call("/api/admin/game", { token: carl, method: "POST", body: { id: cg.game.id, action: "delete" } })).ok);
 assert.equal((await call(`/api/games/${cg.game.id}`, { token: carl })).status, 404, "game deleted");
 console.log("admin: all checks ok");
+// tap a player to deal them in (14 Nov 2026): Carl deals Sam, a walk-in nobody invited; Sam is in and can deal Carl back
+const sam = await call("/api/walkin", { method: "POST", body: { name: "Sam" } });
+const dealt = await call("/api/admin/deal", { token: carl, method: "POST", body: { id: sam.me.id, bots: [] } });
+assert.ok(dealt.game && dealt.game.players.includes(sam.me.id), `Carl deals Sam in: ${dealt.error}`);
+assert.ok((await call("/api/games", { token: sam.token })).games.find((x) => x.id === dealt.game.id), "it's in Sam's tables");
+assert.ok((await call("/api/me", { token: sam.token })).opponents.find((x) => x.id === "carl"), "Sam can deal Carl back");
+assert.equal((await call("/api/admin/deal", { token: nick, method: "POST", body: { id: sam.me.id } })).status, 403, "only Carl");
+console.log("admin deal: ok");

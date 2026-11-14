@@ -946,3 +946,5 @@ html[data-theme="pub"] .gamebar .invbar, html[data-theme="britpop"] .gamebar .in
 .amain { display: block; }
 .amain > small:not(.atag) { display: block; margin-top: 2px; }
 .amain > .atag { margin-left: 4px; vertical-align: 2px; }
+.admin .amain[data-deal] { cursor: pointer; }
+.abtns .chip.play { background: var(--gold); border-color: var(--gold); color: #fff; }
