@@ -28,7 +28,7 @@
  * The cron (wrangler.toml) runs the idle timer: GuffBot plays the go of anyone who's left it too long.
  */
 
-import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, welcomeBack, sweep, nudge, doing, doingAt, logbook, goodNews, makeInvite, inviteInfo, joinInvite, newGuest, Refusal } from "./game.js";
+import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, welcomeBack, sweep, nudge, doing, doingAt, logbook, goodNews, makeInvite, inviteInfo, joinInvite, newGuest, highlightsOf, Refusal } from "./game.js";
 import { BOTS } from "../public/bot.js";
 import { DEFAULTS } from "../public/rules.js";
 import { sha256, randomToken, findPlayer, opponentsOf, looksFor, setDress } from "./people.js";
@@ -73,6 +73,8 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
+    const hl = path.match(/^\/h\/([a-z0-9]{6})$/);
+    if (hl) return sharePage(env, hl[1], url);
     if (!path.startsWith("/api/")) {
       const res = await env.ASSETS.fetch(request);
       if (!/\.(html|js|css|webmanifest)$/.test(path) && path !== "/") return res;
@@ -97,12 +99,35 @@ export default {
   },
 };
 
+/** The shared highlights link: a page with a proper preview for WhatsApp and Messages, which then opens the show. */
+async function sharePage(env, id, url) {
+  let title = "Guffhead highlights", desc = "The best bits, in slow motion.";
+  try {
+    const h = await highlightsOf(env, id);
+    const nm = (p) => h.names[p] || p;
+    if (h.loser) title = `📺 Guffhead highlights: ${nm(h.loser)} is the Guffhead 💩`;
+    desc = `${h.players.map(nm).join(", ")}. The big pick-ups, the bonfires and the moment it all went wrong, in slow motion.`;
+  } catch {}
+  const e = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const to = `/#/highlights/${id}`;
+  const html = `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><title>${e(title)}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex">
+<meta property="og:title" content="${e(title)}"><meta property="og:description" content="${e(desc)}">
+<meta property="og:image" content="${url.origin}/icon-512.png"><meta property="og:url" content="${url.origin}/h/${id}"><meta property="og:type" content="video.other">
+<meta name="twitter:card" content="summary"><meta http-equiv="refresh" content="0; url=${to}"></head>
+<body><script>location.replace(${JSON.stringify(to)})</script><p><a href="${to}">Watch the highlights</a></p></body></html>`;
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } });
+}
+
 const later = (ctx, p) => { if (ctx && ctx.waitUntil) ctx.waitUntil(p.catch((e) => console.error("after", e))); else return p; };
 
 async function api(request, env, ctx, path, url) {
   const m = request.method;
   if (path === "/api/health") return json({ ok: true, build: BUILD, note: BUILD_NOTE, push: pushConfigured(env) });
   if (path === "/api/login" && m === "POST") return login(request, env);
+  // the highlights work without a login, so they can go in the WhatsApp group (Carl, 14 Nov 2026)
+  const mh = path.match(/^\/api\/highlights\/([a-z0-9]{6})$/);
+  if (mh && m === "GET") { const h = await highlightsOf(env, mh[1]); return json({ build: BUILD, note: BUILD_NOTE, highlights: h, looks: await looksFor(env, h.players) }); }
 
   // invites work without a login: whoever opens the link is asked their name
   let mi = path.match(/^\/api\/invites\/([a-z0-9]{8})$/);

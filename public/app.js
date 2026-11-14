@@ -4,6 +4,7 @@ import { comment, describe, weight, room, say, cardName, pluralOf } from "./line
 import { pick as pickPaper } from "./wallpaper.js";
 import { svg as boardSvg, png as boardPng } from "./poster.js";
 import { at as replayAt, steps as replaySteps, canReplay } from "./replay.js";
+import { reel } from "./highlights.js";
 
 import { BUILD } from "./build.js";
 export { BUILD };
@@ -226,13 +227,14 @@ function route() {
   clearInterval(S.poll); S.poll = 0;
   document.body.classList.remove("fit"); S.sheet = false; S.autoMenu = false;
   const h = location.hash || "#/";
-  const gm = h.match(/^#\/(game|replay)\/([a-z0-9]{6})/);
+  const gm = h.match(/^#\/(game|replay|highlights)\/([a-z0-9]{6})/);
   paper(gm ? seedOf(gm[2]) : BAR_SEED);
   nav(h);
   stopIdle();
   const nt = $("nexttoast"); if (nt) nt.remove();
   let m;
   if ((m = h.match(/^#\/join\/([a-z0-9]{8})/))) return renderJoin(m[1]);
+  if ((m = h.match(/^#\/highlights\/([a-z0-9]{6})/))) return renderHighlights(m[1]);   // no login needed: it's for sharing
   if (!S.token) return renderLogin();
   if ((m = h.match(/^#\/game\/([a-z0-9]{6})/))) return openGame(m[1]);
   if ((m = h.match(/^#\/replay\/([a-z0-9]{6})/))) return renderReplay(m[1]);
@@ -247,7 +249,7 @@ window.addEventListener("hashchange", route);
 /** The bottom tabs (as CountGuff and Words and Guff): Tables, the 💩 league, the Logbook, your record. Not on a
  *  game page, where the cards need the room; there a small "Tables" link sits in the header instead. */
 function nav(h) {
-  const inGame = /^#\/(game|replay)\//.test(h);
+  const inGame = /^#\/(game|replay|highlights)\//.test(h);
   const bn = $("bottomnav"), back = $("backlink");
   if (bn) {
     bn.hidden = !S.token || inGame;
@@ -1157,6 +1159,7 @@ function finalCard(G) {
     <ol class="order" aria-label="Finishing order">${order.map((p) => `<li>${headOf(p, 24)} ${esc(names[p])}</li>`).join("")}${G.loser ? `<li class="last">${headOf(G.loser, 24)} ${esc(names[G.loser])} 💩</li>` : ""}</ol>
     <div class="endbtns">
       ${G.watching ? "" : G.next ? `<a class="btn gold" href="#/game/${G.next}">To the next game ▸</a>` : `<button class="btn gold" id="again">Deal again${G.loser && !isHouse(G.loser) && G.loser !== S.me.id ? ` (${esc(names[G.loser])} deals)` : ""}</button>`}
+      <a class="btn tvbtn" href="#/highlights/${G.id}">📺 Watch the highlights</a>
       <div class="row2"><a class="btn ghost" href="#/replay/${G.id}">📼 Watch the replay</a>${G.watching ? "" : `<button class="btn ghost" id="shareGame">📣 Share</button>`}</div>
     </div>
     <p class="small soft">${human.length > 1 ? (G.reigning && G.reigning !== G.loser ? `The 💩 passes from ${esc(names[G.reigning])} to ${esc(names[G.loser])}.` : G.reigning === G.loser ? `${esc(names[G.loser])} keeps the 💩. Again.` : `${esc(names[G.loser])} wears the 💩 until someone else loses.`) : "Practice against the house: it's in your record, not the league."}</p>
@@ -1713,7 +1716,7 @@ async function renderReplay(id) {
           <div class="rname">${headOf(p.id, 26, G.loser === p.id && R.n === all.length)} <b>${esc(you(p.id))}</b>${p.out ? `<span class="outbadge">${p.out === 1 ? "Out first" : "Out"}</span>` : ""}</div>
           <div class="rcards">${p.hand.map((c) => card(c, { size: "sm", s: G.settings })).join("")}${p.up.length ? `<span class="sep">up</span>${p.up.map((c) => card(c, { size: "sm", s: G.settings })).join("")}` : ""}${p.down.length ? `<span class="sep">down</span>${p.down.map((c) => card(c, { size: "sm", s: G.settings, cls: "peek" })).join("")}` : ""}</div>
         </div>`).join("")}</div>
-        <p class="foot"><a href="#/game/${id}">Back to the game</a> · <a href="#/logbook">Logbook</a></p>
+        <p class="foot"><a href="#/highlights/${id}">📺 The highlights</a> · <a href="#/game/${id}">Back to the game</a> · <a href="#/logbook">Logbook</a></p>
       </section>`;
     $("app").querySelectorAll("[data-vcr]").forEach((b) => (b.onclick = () => {
       const k = b.dataset.vcr;
@@ -1728,6 +1731,161 @@ async function renderReplay(id) {
     R.t = setTimeout(() => { if (!R.playing) return; if (R.n >= all.length) { R.playing = false; draw(); return; } R.n++; snap(); draw(); tick(); }, 650);
   };
   draw();
+}
+
+/* ---------- the highlights: Guff of the Day (Carl, 14 Nov 2026) ----------
+   The key moments of a finished game, slowed right down, like the football highlights on a Saturday night: the big
+   pick-ups and whose card caused them, the bonfires, the blind flips that went wrong, everyone going out, and the 💩
+   landing. Works without a login, so the link can go straight into the WhatsApp group. Tap to skip on. */
+async function renderHighlights(id) {
+  const app = $("app");
+  app.innerHTML = `<p class="loading">Cueing up the tape…</p>`;
+  let r;
+  try { r = await api(`/highlights/${id}`); } catch (e) { app.innerHTML = `<section class="hl"><p class="err">${esc(e.message)}</p><p><a href="#/">Guffhead</a></p></section>`; return; }
+  const H = r.highlights;
+  const evs = H.events;
+  const names = { ...H.names, guffbot: "GuffBot", msguffbot: "Ms GuffBot" };
+  const nm = (p) => names[p] || p;
+  S.G = { id: H.id, names, settings: H.settings, players: H.players };
+  if (!canReplay(evs)) { app.innerHTML = `<section class="hl"><h2>No highlights for this one</h2><p class="soft">Only games played since 10 November were recorded go by go.</p><p><a href="#/">Guffhead</a></p></section>`; return; }
+  const clips = reel(evs, names);
+  const all = replaySteps(evs);
+  const slow = reduced() ? 0.15 : 1;
+  const V = { i: -1, gen: 0 };
+  app.innerHTML = `<section class="hl">
+    <div class="tv" id="tv">
+      <div class="tvtop"><span class="hllogo"><b>GUFF</b><span>OF THE DAY</span></span><span class="replaytag" id="rtag" hidden><i></i>REPLAY</span></div>
+      <div class="screen" id="screen"></div>
+      <div class="third" id="third"></div>
+      <div class="tvbar"><span class="hlcount" id="hlcount"></span><button class="linkish" id="hlnext">Next ▸</button><button class="linkish" id="hlend">To the 💩 ▸▸</button></div>
+    </div>
+    <div class="hlbtns" id="hlbtns"></div>
+  </section>`;
+  const screen = $("screen"), third = $("third");
+  const pause = (ms, gen) => new Promise((res) => { const t = setTimeout(() => { S.wake = null; res(gen === V.gen); }, ms * slow); S.wake = () => { clearTimeout(t); S.wake = null; res(false); }; });
+  const live = (gen) => gen === V.gen && location.hash === `#/highlights/${id}`;
+  const left = (p) => p.hand.length + p.up.length + p.down.length;
+  const seatsHtml = (st, focus) => `<div class="hlseats">${st.seats.map((p) => `<div class="hlseat${p.id === focus ? " focus" : ""}${p.out ? " safe" : ""}" data-seat="${p.id}">${headOf(p.id, 46)}<b>${esc(nm(p.id))}</b><small>${p.out ? "safe" : `${left(p)} card${left(p) === 1 ? "" : "s"}`}</small></div>`).join("")}</div>`;
+  const tableHtml = (st) => `<div class="hltable"><div class="pile" id="hlpile">${pileHtml({ pile: st.pile }, H.settings)}<small>${st.pile.length ? `${st.pile.length} on the pile` : "Empty"}</small></div></div>`;
+  const draw = (n, focus) => { const st = replayAt(evs, n, H.settings); screen.innerHTML = `${seatsHtml(st, focus)}${tableHtml(st)}<span class="slomo" id="slomo" hidden>SLO-MO</span>`; return st; };
+  const chyron = (m, i) => {
+    const presenter = i % 2 ? "msguffbot" : "guffbot";
+    third.innerHTML = `<div class="chy ${m.kind}"><span class="chytitle">${esc(m.title)}</span><p>${headOf(presenter, 30)}<span>${esc(m.line)}</span></p></div>`;
+  };
+  const rect = (el) => el.getBoundingClientRect();
+  // cards travel, slowly, from a seat to the pile (or the pile to a seat)
+  async function fly(fromEl, toEl, html, ms, gen) {
+    if (!fromEl || !toEl || slow < 1) return;
+    const a = rect(fromEl), b = rect(toEl);
+    const f = document.createElement("div");
+    f.className = "hlfly"; f.innerHTML = html;
+    document.body.appendChild(f);
+    const fw = rect(f);
+    const x0 = a.left + a.width / 2 - fw.width / 2, y0 = a.top + a.height / 2 - fw.height / 2;
+    const x1 = b.left + b.width / 2 - fw.width / 2, y1 = b.top + b.height / 2 - fw.height / 2;
+    const anim = f.animate([{ transform: `translate(${x0}px, ${y0}px) scale(.5) rotate(-12deg)`, opacity: 0.4 }, { transform: `translate(${(x0 + x1) / 2}px, ${Math.min(y0, y1) - 40}px) scale(1.15) rotate(4deg)`, opacity: 1, offset: 0.55 }, { transform: `translate(${x1}px, ${y1}px) scale(1) rotate(0deg)`, opacity: 1 }], { duration: ms, easing: "cubic-bezier(.25, .1, .25, 1)", fill: "forwards" });
+    await Promise.race([anim.finished, pause(ms + 50, gen)]);
+    f.remove();
+  }
+  const seatEl = (p) => screen.querySelector(`[data-seat="${p}"]`);
+  // one step of the game, in slow motion
+  async function act(e, n, gen) {
+    if (!live(gen)) return;
+    if (e.k === "play") {
+      await fly(seatEl(e.p), $("hlpile"), `<span class="hlcards">${e.cards.map((c) => card(c, { size: "lg", s: H.settings })).join("")}</span>`, 1600, gen);
+      if (!live(gen)) return;
+      if (e.burn) {
+        const st = replayAt(evs, n, H.settings);
+        const pile = [...st.pile, ...e.cards];
+        $("hlpile").innerHTML = `${pileHtml({ pile }, H.settings)}<small>${pile.length} on the pile</small>`;
+        await pause(600, gen); if (!live(gen)) return;
+        const fan = $("hlpile").querySelector(".fan"); if (fan) fan.classList.add("burning");
+        screen.insertAdjacentHTML("beforeend", `<span class="hlfire">🔥</span>`); whoosh();
+        await pause(1500, gen);
+      } else snap(e.cards.length);
+    } else if (e.k === "flip") {
+      await fly(seatEl(e.p), $("hlpile"), `<span class="hlcards flipcard">${card(e.card, { size: "lg", s: H.settings })}</span>`, 1600, gen);
+      if (!live(gen)) return;
+      if (!e.ok) { screen.insertAdjacentHTML("beforeend", `<span class="hlstamp nope">WON'T GO</span>`); await pause(1100, gen); }
+    } else if (e.k === "pickup") {
+      const before = replayAt(evs, n, H.settings);
+      $("hlpile").innerHTML = `<small>&nbsp;</small>`;
+      await fly($("hlpile"), seatEl(e.p), `<span class="hlscoop">${before.pile.slice(-7).map(() => back({ size: "md" })).join("")}<b>+${e.n}</b></span>`, 1700, gen);
+    }
+    if (!live(gen)) return;
+    const st = draw(n + 1, e.p);
+    $("slomo").hidden = false;
+    return st;
+  }
+  async function clip(i, gen) {
+    const m = clips[i];
+    $("hlcount").textContent = `${i + 1} of ${clips.length}`;
+    $("rtag").hidden = false;
+    third.innerHTML = `<div class="chy ${m.kind}"><span class="chytitle">${esc(m.title)}</span></div>`;
+    // the steps to show: the culprit's card and the pick-up, the flip and the pick-up, or the one move
+    const n0 = Math.max(0, m.step);
+    const run = m.kind === "pickup" && m.by ? [n0, n0 + 1] : m.kind === "flip" ? [n0, n0 + 1] : m.kind === "out" || m.kind === "first" || m.kind === "over" ? (m.step >= 0 ? [m.step] : []) : [n0];
+    draw(run.length ? run[0] : all.length, m.who);
+    $("slomo").hidden = false;
+    if (!(await pause(700, gen))) return;
+    for (const n of run) { if (!live(gen)) return; if (all[n]) await act(all[n], n, gen); if (!(await pause(350, gen))) return; }
+    if (!live(gen)) return;
+    if (m.kind === "out" || m.kind === "first") {
+      const el = seatEl(m.who); if (el) el.insertAdjacentHTML("beforeend", `<span class="hlstamp safe">SAFE</span>`);
+      buzz(30);
+    }
+    if (m.kind === "over") {
+      screen.innerHTML = `<div class="hlcrown">${headOf(m.who, 120, true, true)}<b>${esc(nm(m.who))}</b><small>is the Guffhead</small></div>`;
+      buzz([80, 40, 120]);
+    }
+    chyron(m, i);
+    await pause(m.kind === "over" ? 4800 : 3600, gen);
+  }
+  function fullTime() {
+    V.gen++;
+    $("rtag").hidden = true;
+    $("hlcount").textContent = "Full time";
+    $("hlnext").hidden = true; $("hlend").hidden = true;
+    const order = H.order || [];
+    screen.innerHTML = `<div class="hlft"><span class="ftlabel">FULL TIME</span>${H.loser ? `<div class="hlcrown small">${headOf(H.loser, 84, true, false)}<b>${esc(nm(H.loser))}</b><small>wears the 💩</small></div>` : ""}
+      <ol class="order">${order.map((p, k) => `<li>${headOf(p, 24)} ${esc(nm(p))}${k === 0 ? " 🥇" : ""}</li>`).join("")}${H.loser ? `<li class="last">${headOf(H.loser, 24)} ${esc(nm(H.loser))} 💩</li>` : ""}</ol></div>`;
+    third.innerHTML = `<div class="chy over"><p>${headOf("guffbot", 30)}<span>${esc(H.loser ? `That's all from the back room. ${nm(H.loser)}, we'll see you next week. Bring a hat.` : "That's all from the back room.")}</span></p></div>`;
+    const mine = S.token && S.me && H.players.includes(S.me.id);
+    $("hlbtns").innerHTML = `<button class="btn gold" id="hlshare">📣 Share the highlights</button>
+      <div class="row2"><button class="btn ghost" id="hlagain">↺ Watch again</button>${mine ? `<a class="btn ghost" href="#/game/${id}">Back to the game</a>` : S.token ? `<a class="btn ghost" href="#/">Guffhead</a>` : `<a class="btn ghost" href="https://hub.carlosfandango.net/">More Guff games</a>`}</div>`;
+    $("hlshare").onclick = () => shareHighlights(H, names);
+    $("hlagain").onclick = () => { $("hlbtns").innerHTML = ""; $("hlnext").hidden = false; $("hlend").hidden = false; play(); };
+  }
+  async function intro(gen) {
+    $("hlcount").textContent = "";
+    $("rtag").hidden = true;
+    screen.innerHTML = `<div class="hlintro"><span class="hllogo big"><b>GUFF</b><span>OF THE DAY</span></span><div class="vs">${H.players.map((p) => `<span>${headOf(p, 52)}<b>${esc(nm(p))}</b></span>`).join("")}</div><small>All the action from the back room, presented by GuffBot and Ms GuffBot.</small></div>`;
+    third.innerHTML = "";
+    await pause(2800, gen);
+  }
+  // -1 is the intro; a tap cuts to the next clip, Skip goes straight to full time
+  async function run(start) {
+    const gen = ++V.gen;
+    for (let i = start; i < clips.length; i++) {
+      if (!live(gen)) return;
+      if (i < 0) await intro(gen); else await clip(i, gen);
+      if (gen !== V.gen) { if (V.jump === "next") { V.jump = null; return run(i + 1); } return; }
+    }
+    if (live(gen)) fullTime();
+  }
+  const play = () => run(-1);
+  // tapping the screen or Next cuts to the next clip; Skip goes to the result
+  const next = () => { if ($("hlcount").textContent === "Full time") return; V.jump = "next"; V.gen++; document.querySelectorAll(".hlfly").forEach((f) => f.remove()); if (S.wake) S.wake(); };
+  $("hlnext").onclick = (e) => { e.stopPropagation(); next(); };
+  screen.onclick = next;
+  $("hlend").onclick = (e) => { e.stopPropagation(); document.querySelectorAll(".hlfly").forEach((f) => f.remove()); if (S.wake) S.wake(); fullTime(); };
+  play();
+}
+async function shareHighlights(H, names) {
+  const url = `${location.origin}/h/${H.id}`;
+  const text = H.loser ? `📺 Guffhead highlights: watch ${S.me && H.loser === S.me.id ? "me" : names[H.loser] || "someone"} become the Guffhead 💩` : "📺 Guffhead highlights";
+  try { if (navigator.share) { await navigator.share({ text, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+  try { await navigator.clipboard.writeText(`${text} ${url}`); toast("Copied. Paste it into the WhatsApp group."); } catch { toast(url, 6000); }
 }
 
 /* ---------- the Logbook: finished games between you and your friends (CountGuff's Logbook) ---------- */

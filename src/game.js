@@ -196,6 +196,14 @@ export function summary(st, pid) {
 
 /* ---------- storage ---------- */
 
+/** A finished game for the highlights: no login, so anyone the link is shared with can watch. Only once it's over
+ *  (nothing left to hide), and only what the show needs. */
+export async function highlightsOf(env, id) {
+  const st = await load(env, id);
+  if (st.status !== "finished") no("Still being played. Highlights after the final whistle.", 404);
+  return { id: st.id, players: st.players, names: st.names, settings: st.settings, loser: st.loser || null, order: st.g.finished, finished: st.finished || st.updated, events: st.g.events };
+}
+
 async function load(env, id) {
   const row = await env.DB.prepare(`SELECT state, ver FROM gh_games WHERE id = ?`).bind(id).first();
   if (!row) no("No such game", 404);
