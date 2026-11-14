@@ -1,4 +1,4 @@
 // Guffhead: the version, in one place for the page and the Worker. Bump it on every deploy: a phone still on an
 // older page sees the server's newer number and offers "tap to update".
-export const BUILD = "2026-11-13.4";
-export const NOTE = "Pick your own look: 2030, 1990s or 1970s. You can change it any time in the lobby.";
+export const BUILD = "2026-11-14.1";
+export const NOTE = "The game fits your screen again: the other players, the pile and your hand all at once.";

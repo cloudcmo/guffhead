@@ -857,7 +857,9 @@ function renderGame(staging = false) {
   const fit = G.status === "playing" && g.phase === "play";
   document.body.classList.toggle("fit", fit);
   // the one-screen layout needs the header's real height (it differs by look and by phone)
-  if (fit) { const top = document.querySelector(".top"); if (top) document.documentElement.style.setProperty("--toph", `${Math.ceil(top.getBoundingClientRect().bottom + 4)}px`); }
+  if (fit) { const top = document.querySelector(".top"); if (top) document.documentElement.style.setProperty("--toph", `${Math.ceil(top.getBoundingClientRect().bottom + window.scrollY + 4)}px`); }
+  // (measured from the top of the page, not the screen: measured after a scroll it came out short, the game grew
+  // taller than the phone, the table ate the spare room and your hand fell off the bottom. Carl, 14 Nov 2026)
   if (!fit) S.sheet = false;
   const extras = `<div class="toggles"><button class="chip${S.tips ? " on" : ""}" data-toggle="tips" aria-pressed="${S.tips}">🎓 Tips ${S.tips ? "on" : "off"}</button><button class="chip${S.talk ? " on" : ""}" data-toggle="talk" aria-pressed="${S.talk}">🎙️ GuffBot ${S.talk ? "on" : "off"}</button><button class="chip${sound.on ? " on" : ""}" data-toggle="sound" aria-pressed="${sound.on}">${sound.on ? "🔊" : "🔇"}</button></div>`;
   const tabs = `<nav class="tabs4" role="tablist">
@@ -895,7 +897,8 @@ function renderGame(staging = false) {
       <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a><br><small class="soft">Tonight's wallpaper: ${esc(pickPaper(seedOf(G.id), S.theme).name.toLowerCase())}</small></p>
     </section>`;
   S.lastDir = g.dir;
-  if (staging) window.scrollTo(0, keep);
+  if (staging) window.scrollTo(0, fit ? 0 : keep);
+  else if (fit && window.scrollY) window.scrollTo(0, 0);
   wireGame();
   renderChat();
   fitHand();
@@ -955,6 +958,8 @@ function bringMyGoIntoView(G) {
   if (a && (a.id === "chatText" || a.tagName === "SELECT")) return;
   const target = $("actions") && $("actions").children.length ? $("actions") : document.querySelector(".mine");
   if (!target) return;
+  // a live game is one screen, so there's nothing to scroll to: just make sure we're at the top
+  if (document.body.classList.contains("fit")) { if (window.scrollY) window.scrollTo(0, 0); return; }
   const r = target.getBoundingClientRect();
   if (r.bottom <= window.innerHeight - 8 && r.top >= 0) return;
   target.scrollIntoView({ block: "end", behavior: reduced() ? "auto" : "smooth" });
