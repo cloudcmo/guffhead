@@ -55,13 +55,23 @@ const hostNameOf = (env) => async (id) => { if (id === "walkin") return null; co
 /** A salted hash of the connection, so one place can't take all the seats. The address itself is never stored. */
 const ipHashOf = (request) => sha256(`guffhead-seat:${request.headers.get("CF-Connecting-IP") || "local"}`);
 /** Cloudflare Turnstile, the free bot check: on when TURNSTILE_SECRET is set, skipped when it isn't (local tests). */
+// A problem on our side (a wrong or missing secret, Cloudflare unreachable) never locks real people out: they're let
+// in and it's logged; the 200 cap and the per-connection limit still hold. Only a failed check on their side refuses.
+const OUR_FAULT = ["missing-input-secret", "invalid-input-secret", "internal-error"];
 async function humanCheck(env, token, request) {
   if (!env.TURNSTILE_SECRET) return true;
   if (!token) return false;
   const f = new FormData();
-  f.append("secret", env.TURNSTILE_SECRET); f.append("response", token);
+  f.append("secret", String(env.TURNSTILE_SECRET).trim()); f.append("response", token);
   const ip = request.headers.get("CF-Connecting-IP"); if (ip) f.append("remoteip", ip);
-  try { const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: f }); const d = await r.json(); return !!d.success; } catch { return false; }
+  let d;
+  try { const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: f }); d = await r.json(); }
+  catch (e) { console.error("turnstile unreachable", e); return true; }
+  if (d.success) return true;
+  const codes = d["error-codes"] || [];
+  console.error(`turnstile refused: ${codes.join(",")}`);
+  humanCheck.last = codes;
+  return codes.some((c) => OUR_FAULT.includes(c));
 }
 async function startSession(env, pid) {
   const token = randomToken();
@@ -149,7 +159,7 @@ async function api(request, env, ctx, path, url) {
   if (path === "/api/walkin" && m === "POST") {
     const b = (await body(request)) || {};
     const name = checkName(b.name);
-    if (!(await humanCheck(env, b.turnstile, request))) return err("Couldn't check you're not a robot. Try again.", 403);
+    if (!(await humanCheck(env, b.turnstile, request))) return json({ error: "Couldn't check you're not a robot. Try again.", why: humanCheck.last || [] }, 403);
     const g = await newGuest(env, name, "walkin", await ipHashOf(request));
     const token = await startSession(env, g.id);
     return json({ token, me: { id: g.id, name: g.name, guest: true, walkin: true, host: "walkin", hostName: null } });
