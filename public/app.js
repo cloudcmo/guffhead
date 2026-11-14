@@ -727,7 +727,11 @@ function show(G, since, mine = false) {
   // what to replay: everything after `since`, except the moves I made myself just now (I saw myself make them)
   const all = S.evs.filter((e) => e.seq > since);
   const fresh = all.filter((e) => !(mine && e.p === S.me.id && !e.auto && !e.autopilot && e.k !== "out" && e.k !== "over"));
-  const toPlay = fresh.filter((e) => weight(e) !== "small");
+  let toPlay = fresh.filter((e) => weight(e) !== "small");
+  // once you're out and the game's over, don't replay the rest move by move (Carl, 14 Nov 2026: the table already
+  // shows the end, so it looked like the last player "carried on playing" on her own). Just who went out, and the 💩.
+  const myOut = G.status === "finished" ? S.evs.find((e) => e.k === "out" && e.p === S.me.id) : null;
+  if (myOut) toPlay = toPlay.filter((e, i, a) => e.seq <= myOut.seq || e.k === "out" || e.k === "over" || (a[i + 1] && a[i + 1].k === "out"));
   store.set(seenKey(G.id), G.g.seq);
   if (!toPlay.length || reduced()) { renderGame(); return; }
   catchUp(toPlay, since > 0 && !mine && toPlay.length > 2, prevPile ? { all, pile: prevPile } : null);
