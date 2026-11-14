@@ -278,7 +278,7 @@ async function renderLogin() {
     <section class="door">
       <div class="doorhero">
         <div class="doorman">${dressed("guffbot", seedOf(tonight()), 150) || headOf("guffbot", 110)}</div>
-        <div><h1 class="doortitle">Guffhead</h1><p class="doorsub">Shithead, the card game, on your phone. Play GuffBot now, then take on your mates at your own pace.</p></div>
+        <div><h1 class="doortitle">Guffhead</h1><p class="doorsub">S***head, the card game, on your phone. Play GuffBot now, then take on your mates at your own pace.</p></div>
       </div>
       <form id="walkinForm" class="card-panel form walkin" autocomplete="on">
         <h2>New here? Play now</h2>
@@ -345,7 +345,7 @@ async function renderLobby() {
         <div class="landlord">${headOf("guffbot", 74)}</div>
         <p class="patter">"${esc(say("hello", S.me.guest && !r.games.length ? 0 : seedOf(tonight() + S.me.id), { name: S.me.name }))}"</p>
       </div>
-      ${S.me.walkin ? `<p class="card-panel guestnote">Welcome, ${esc(S.me.name)}. Deal a game against GuffBot and Ms GuffBot below, or invite a friend: if they like Shithead, they'll like this. This phone remembers you.</p>` : S.me.guest ? `<p class="card-panel guestnote">You're ${esc(S.me.hostName || "a friend")}'s guest. Deal them another game below, or invite someone of your own. This phone remembers you.</p>` : ""}
+      ${S.me.walkin ? `<p class="card-panel guestnote">Welcome, ${esc(S.me.name)}. Deal a game against GuffBot and Ms GuffBot below, or invite a friend: if they like S***head, they'll like this. This phone remembers you.</p>` : S.me.guest ? `<p class="card-panel guestnote">You're ${esc(S.me.hostName || "a friend")}'s guest. Deal them another game below, or invite someone of your own. This phone remembers you.</p>` : ""}
       ${newsLine(r.news)}
       ${S.me.guest ? "" : leagueSnippet(r.league)}
       <h2>Your tables</h2>
@@ -584,7 +584,7 @@ function inviteSheet() {
   let bots = [];
   const draw = (out = "") => {
     box.innerHTML = `<div class="howcard invcard" role="dialog" aria-label="Invite a friend"><h3>📨 Take on a friend</h3>
-      <p>Send a link by WhatsApp or text. They type their first name and they're straight into a game of Shithead with you. No login, no app.</p>
+      <p>Send a link by WhatsApp or text. They type their first name and they're straight into a game of S***head with you. No login, no app.</p>
       <div class="chips"><button class="chip${bots.length ? "" : " on"}" data-who="two">Just the two of us</button><button class="chip${bots.length ? " on" : ""}" data-who="bots">Bring GuffBot and Ms GuffBot</button></div>
       <div id="invOut2">${out}</div>
       <div class="howbtns"><button class="linkish" data-x>Close</button>${out ? "" : `<button class="btn gold" id="invMake">Make the link</button>`}</div></div>`;
@@ -640,7 +640,7 @@ async function makeInvite(o = {}) {
     const r = await api("/invites", { method: "POST", body: { players: o.bots || NEW.crew.filter(isHouse), settings: NEW.rules } });
     watchInvite(r.code);
     r.url = `${location.origin}/#/join/${r.code}`;
-    const text = `Fancy a game of Shithead with me? It's called Guffhead, it's on your phone and you play at your own pace. Tap to join, no login needed:`;
+    const text = `Fancy a game of S***head with me? It's called Guffhead, it's on your phone and you play at your own pace. Tap to join, no login needed:`;
     const html = `<p class="linkbox"><span>${esc(r.url)}</span></p><div class="row2"><button class="btn small gold" id="invShare">📣 Share it</button><button class="btn small ghost" id="invCopy">Copy link</button></div><p class="small soft">Works once, for one person, for a week. We'll tell you the moment they join.</p>`;
     if (o.after) o.after(html); else $("inviteOut").innerHTML = html;
     $("invCopy").onclick = async () => { try { await navigator.clipboard.writeText(`${text} ${r.url}`); toast("Copied. Paste it into a message."); } catch { toast(r.url, 6000); } };
@@ -666,7 +666,7 @@ async function renderJoin(code) {
   $("app").innerHTML = `
     <section class="door join">
       <div class="doorman">${dressed("guffbot", seedOf(code), 150) || headOf("guffbot", 110)}</div>
-      <p class="patter"><b>${esc(inv.hostName)}</b> wants a game of Shithead with you${others.length ? `, with ${esc(others.join(" and "))}` : ""}. We call it Guffhead. No app, no login: just your first name.</p>
+      <p class="patter"><b>${esc(inv.hostName)}</b> wants a game of S***head with you${others.length ? `, with ${esc(others.join(" and "))}` : ""}. We call it Guffhead. No app, no login: just your first name.</p>
       ${action}
       <details class="howto"><summary>How to play</summary>
         <p>Everyone gets three cards face down, three face up and three in hand. Play a card at least as high as the top of the pile, or pick the whole pile up. Get rid of all your cards. The last one holding cards is the Guffhead, and wears the 💩 until someone else loses.</p>
@@ -1327,7 +1327,7 @@ function finalCard(G) {
       <div class="row2"><a class="btn ghost" href="#/replay/${G.id}">📼 Watch the replay</a>${G.watching ? "" : `<button class="btn ghost" id="shareGame">📣 Share</button>`}</div>
     </div>
     <p class="small soft">${human.length > 1 ? (G.reigning && G.reigning !== G.loser ? `The 💩 passes from ${esc(names[G.reigning])} to ${esc(names[G.loser])}.` : G.reigning === G.loser ? `${esc(names[G.loser])} keeps the 💩. Again.` : `${esc(names[G.loser])} wears the 💩 until someone else loses.`) : "Practice against the house: it's in your record, not the league."}</p>
-    ${S.me.guest ? `<p class="guestnote">Enjoyed that? Deal again, or invite a friend from your tables: anyone who likes Shithead will like this.</p>` : ""}
+    ${S.me.guest ? `<p class="guestnote">Enjoyed that? Deal again, or invite a friend from your tables: anyone who likes S***head will like this.</p>` : ""}
     ${crackerHtml(G)}
   </div>`;
 }
