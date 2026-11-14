@@ -9,7 +9,7 @@ errors = []
 with sync_playwright() as p:
     b = p.chromium.launch()
     pg = b.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=2)
-    pg.add_init_script("localStorage.setItem('gh:look-asked', '1')")   # the one-off look picker has its own check
+    pg.add_init_script("localStorage.setItem('gh:look-asked', '1'); localStorage.setItem('gh:how-seen', '1')")   # the one-off look picker has its own check
     pg.on("console", lambda m: errors.append(m.text) if m.type == "error" and "fonts.g" not in m.text else None)
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.goto(BASE + "/")

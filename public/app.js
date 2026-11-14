@@ -1,6 +1,6 @@
 // Guffhead: the page. The back room of a 1970s pub. Routes: #/  #/game/:id  #/replay/:id  #/league  #/logbook  #/record
 import { needWords, rankOf, isMagic, describeRules, DEFAULTS, IDLE_CHOICES, MAX_PLAYERS, sortCards } from "./rules.js";
-import { comment, describe, weight, room, say, cardName, pluralOf } from "./lines.js";
+import { comment, describe, weight, room, say, cardName, pluralOf, aCard } from "./lines.js";
 import { pick as pickPaper } from "./wallpaper.js";
 import { svg as boardSvg, png as boardPng } from "./poster.js";
 import { at as replayAt, steps as replaySteps, canReplay } from "./replay.js";
@@ -311,6 +311,7 @@ async function renderLobby() {
       ${S.me.guest ? "" : leagueSnippet(r.league)}
       <h2>Your tables</h2>
       <div class="tables">${playing.length ? playing.map(tableRow).join("") : `<p class="soft">No games on. Deal one below.</p>`}</div>
+      ${done.length && Date.now() - (done[0].finished || done[0].updated) < 2 * 86400000 ? `<a class="card-panel hlpromo" href="#/highlights/${done[0].id}"><span class="hllogo"><b>GUFF</b><span>OF THE DAY</span></span><span>📺 ${esc(done[0].loser === S.me.id ? "Relive how you became the Guffhead" : `Watch ${done[0].names[done[0].loser] || "someone"} become the Guffhead`)} ▸</span></a>` : ""}
       ${done.length ? `<details class="done"><summary>Lately finished</summary>${done.map(tableRow).join("")}</details>` : ""}
 
       <h2>Deal a game</h2>
@@ -522,7 +523,12 @@ function tableRow(g) {
   else if (g.myGo) what = g.phase === "swap" ? "<b>Pick your face-up cards</b>" : "<b>Your go</b>";
   else what = g.phase === "swap" ? `Waiting for ${g.required.map((p) => esc(g.names[p])).join(", ")} to sort their cards` : `Waiting for ${g.required.map((p) => esc(g.names[p])).join(", ")}`;
   const mine = g.left[S.me.id];
-  return `<a class="tablerow${g.myGo ? " go" : ""}" href="#/game/${g.id}">${thumb}<span class="who"><span class="heads">${heads}</span>${who}<small>${what}</small>${g.last && g.status === "playing" ? `<small class="lastline">${esc(g.last)}</small>` : ""}${extra}</span><span class="sc">${g.status === "playing" ? `${mine}<small>cards</small>` : g.loser === S.me.id ? "💩" : "😅"}</span></a>`;
+  // where you stand (casual player review, 14 Nov 2026: "Is 5 good? Is that nearly winning?")
+  const liveLeft = Object.entries(g.left || {}).filter(([, n]) => n > 0);
+  const place = mine > 0 ? 1 + liveLeft.filter(([p, n]) => p !== S.me.id && n < mine).length : 0;
+  const worst = mine > 0 && liveLeft.length > 1 && liveLeft.every(([p, n]) => p === S.me.id || n < mine);
+  const standing = g.status !== "playing" || g.phase !== "play" ? "" : mine === 0 ? `<small class="standing safe">You're out: safe</small>` : worst ? `<small class="standing danger"><i>💩</i> You're in danger</small>` : place === 1 ? `<small class="standing good">You're winning</small>` : "";
+  return `<a class="tablerow${g.myGo ? " go" : ""}" href="#/game/${g.id}">${thumb}<span class="who"><span class="heads">${heads}</span>${who}<small>${what}</small>${g.last && g.status === "playing" ? `<small class="lastline">${esc(g.last)}</small>` : ""}${extra}${standing}</span></span><span class="sc">${g.status === "playing" ? `${mine}<small>to go</small>` : g.loser === S.me.id ? "💩" : "😅"}</span></a>`;
 }
 
 function ago(t) { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; }
@@ -735,7 +741,10 @@ function show(G, since, mine = false) {
   const myOut = G.status === "finished" ? S.evs.find((e) => e.k === "out" && e.p === S.me.id) : null;
   if (myOut) toPlay = toPlay.filter((e, i, a) => e.seq <= myOut.seq || e.k === "out" || e.k === "over" || (a[i + 1] && a[i + 1].k === "out"));
   store.set(seenKey(G.id), G.g.seq);
-  if (!toPlay.length || reduced()) { renderGame(); return; }
+  // what GuffBot did on your behalf, in one line (casual player review, 14 Nov 2026)
+  const mineAuto = all.filter((e) => e.p === S.me.id && e.autopilot && ["play", "pickup", "flip"].includes(e.k));
+  S.autoSummary = mineAuto.length ? `🤖 GuffBot played ${mineAuto.length === 1 ? "a go" : `${mineAuto.length} goes`} for you: ${mineAuto.slice(-4).map((e) => e.k === "pickup" ? `picked up ${e.n}` : e.k === "flip" ? `flipped ${aCard(e.card)}` : e.cards.length === 1 ? aCard(e.cards[0]) : `${["", "", "a pair of", "three", "four"][e.cards.length]} ${pluralOf(e.cards[0])}`).join(", ")}${mineAuto.length > 4 ? " and more" : ""}.` : null;
+  if (!toPlay.length || reduced()) { renderGame(); autoSummaryToast(); return; }
   catchUp(toPlay, since > 0 && !mine && toPlay.length > 2, prevPile ? { all, pile: prevPile } : null);
 }
 
@@ -816,8 +825,9 @@ async function catchUp(evs, away, track = null) {
   }
   S.stagePile = false;
   S.playing = false; S.wake = null;
-  if (S.G) renderGame();
+  if (S.G) { renderGame(); autoSummaryToast(); }
 }
+function autoSummaryToast() { if (S.autoSummary) { toast(S.autoSummary, 7000); S.autoSummary = null; } }
 /** One line of the catch-up list: whose face, what they did, GuffBot's word on it if he's on. */
 function catchLine(e, names) {
   const who = e.k === "over" ? e.loser : e.p;
@@ -920,6 +930,7 @@ function renderGame(staging = false) {
     </section>`;
   S.lastDir = g.dir;
   if (fit && G.myGo) { const nt = $("nexttoast"); if (nt) nt.remove(); }
+  if (fit && !staging && !G.watching && !store.get("gh:how-seen") && !document.querySelector(".howsheet")) { store.set("gh:how-seen", 1); howItWorks(G); }
   if (staging) window.scrollTo(0, fit ? 0 : keep);
   else if (fit && window.scrollY) window.scrollTo(0, 0);
   wireGame();
@@ -939,7 +950,7 @@ function tabPanel(G) {
   const s = G.settings;
   if (S.tab === "chat") return `<div id="chat" class="chat"></div>${quickEmojiRow()}<form id="chatForm" class="chatform"><input id="chatText" maxlength="280" placeholder="Say something to the table" autocomplete="off"><button class="btn small">Say</button></form>`;
   if (S.tab === "log") return logHtml(G);
-  if (S.tab === "rules") return `<ul class="rulelist">${describeRules(s).map(([k, v]) => `<li><b>${esc(k)}</b> ${esc(v)}</li>`).join("")}<li><b>Idle timer</b> ${s.idleHours ? `GuffBot plays anyone's go after ${s.idleHours} hours.` : "Off: we wait."}</li></ul><details class="howto"><summary>How to play</summary>${howTo(s)}</details>`;
+  if (S.tab === "rules") return `<button class="btn ghost howbtn" id="howItWorks">👀 How it works, in 4 steps</button><p class="basic"><b>The basics</b> Play the same or higher than the top card. Can't? Pick up the pile. Your hand first, then your face-up cards, then the blind ones. Last one holding cards is the Guffhead.</p><ul class="rulelist">${describeRules(s).map(([k, v]) => `<li><b>${esc(k)}</b> ${esc(v)}</li>`).join("")}<li><b>Idle timer</b> ${s.idleHours ? `GuffBot plays anyone's go after ${s.idleHours} hours.` : "Off: we wait."}</li></ul><details class="howto"><summary>How to play</summary>${howTo(s)}</details>`;
   return `<div class="cast">${G.players.map((p) => `<figure class="${p === S.me.id ? "me" : ""}${p === G.loser ? " loser" : ""}">${figureOf(G.id, p, 110, wears(G, p), S.drop && wears(G, p))}<figcaption>${esc(you(p))}${wears(G, p) ? " 💩" : ""}</figcaption></figure>`).join("")}</div>${clobber(G)}
     ${G.status === "playing" && G.players.includes(S.me.id) ? `<button class="btn ghost" id="resign">Leave the table (you'll be the Guffhead)</button>` : ""}`;
 }
@@ -1007,12 +1018,12 @@ function oppPod(G, p, turnId, nextId) {
   const hand = typeof p.hand === "number" ? p.hand : p.hand.length;
   const here = S.here.includes(p.id);
   const busy = S.doing[p.id];
-  const status = p.out ? "" : G.auto && G.auto[p.id] ? `<small class="podstatus auto">🤖 AutoPlay</small>` : p.id === turnId ? `<small class="podstatus go">${here && busy === "picking" ? "Picking…" : "Their go"}</small>` : here ? `<small class="podstatus">looking 👀</small>` : p.id === nextId ? `<small class="podstatus next">Next</small>` : "";
+  const status = p.out ? "" : G.auto && G.auto[p.id] ? `<small class="podstatus auto">🤖 AutoPlay</small>` : p.id === turnId ? `<small class="podstatus go">${here && busy === "picking" ? "Picking…" : "Their go"}</small>` : here ? `<small class="podstatus">looking 👀</small>` : p.id === nextId ? `<small class="podstatus next">${turnId === S.me.id ? "Plays after you" : "Plays next"}</small>` : "";
   const turn = p.id === turnId;
   const known = (p.known || []).slice();
   const out = p.out ? `<span class="outbadge">${p.out === 1 ? "Out first" : "Out"}</span>` : "";
   return `<div class="pod${turn ? " turn" : ""}${p.out ? " isout" : ""}${G.loser === p.id ? " guffhead" : ""}" data-pid="${p.id}">
-    <div class="podhead"><span class="podav">${headOf(p.id, 34, wears(G, p.id), S.drop && wears(G, p.id))}<b class="handbadge${hand ? "" : " none"}" title="${hand} in hand">${hand}</b></span><span class="podname">${esc(nameOf(p.id))}${here ? `<i class="dot" title="At the table now"></i>` : ""}${status}${dangerTag(p.id)}</span>${out}</div>
+    <div class="podhead"><span class="podav">${headOf(p.id, 34, wears(G, p.id), S.drop && wears(G, p.id))}</span><span class="podname">${esc(nameOf(p.id))}${here ? `<i class="dot" title="At the table now"></i>` : ""}${status}${p.out ? "" : `<small class="podcount">${hand} in hand</small>`}${dangerTag(p.id)}</span>${out}</div>
     <div class="podcards">
       <span class="tablecards">${tableStack(p, "op", G.settings)}</span>
     </div>
@@ -1136,7 +1147,7 @@ function actionsHtml(G) {
   if (o.zone === "down") return `<p class="prompt">Tap one of your face-down cards to flip it.</p>`;
   const sel = S.sel;
   const label = S.warn ? S.warn : sel.length ? `Play ${sel.length === 1 ? `the ${cardName(sel[0])}` : `${["", "", "two", "three", "four"][sel.length] || sel.length} ${pluralOf(sel[0])}`}` : o.plays.length ? "Pick a card (double-tap to play)" : "Nothing will go";
-  return `<button class="btn gold big${S.warn ? " armed" : ""}" id="playBtn"${sel.length ? "" : " disabled"}>${esc(label)}</button>${o.pickUp ? `<button class="btn ghost" id="pickBtn">Pick up ${G.g.pile.length}</button>` : ""}`;
+  return `<button class="btn gold big${S.warn ? " armed" : ""}" id="playBtn"${sel.length ? "" : " disabled"}>${esc(label)}</button>${o.pickUp ? `<button class="btn ghost pickbtn" id="pickBtn">Pick up ${G.g.pile.length}<small>then it's ${esc(nameOf(nextAfter(G.g, G.g.turn) || ""))}'s go</small></button>` : ""}`;
 }
 
 function statusLine(G) {
@@ -1383,6 +1394,8 @@ function startIdle(G) {
   }, 60000);
 }
 
+// the How it works card can be reopened from the Rules tab
+document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("#howItWorks") && S.G) howItWorks(S.G); });
 function wireGame() {
   const G = S.G;
   const app = $("app");
@@ -1781,6 +1794,28 @@ async function renderReplay(id) {
     R.t = setTimeout(() => { if (!R.playing) return; if (R.n >= all.length) { R.playing = false; draw(); return; } R.n++; snap(); draw(); tick(); }, 650);
   };
   draw();
+}
+
+/* ---------- How it works: four steps, once, on your first game (casual player review, 14 Nov 2026) ---------- */
+function howItWorks(G) {
+  const s = G.settings;
+  const steps = [
+    ["Beat the top card", `Play a card the same or higher than the one on top of the pile. The pill under the pile says what you need.`, `${card("6C", { size: "md" })}<span class="arrow">→</span>${card("9H", { size: "md" })}`],
+    ["Can't? Pick it up", `If nothing you've got will go, you pick up the whole pile. Then it's the next player's go.`, `<span class="pickfan">${[0, 1, 2, 3].map((i) => `<span style="--i:${i}">${back({ size: "sm" })}</span>`).join("")}</span>`],
+    ["Hand, then face up, then blind", `Play from your hand first. When it's empty, play your face-up cards. Last of all, flip the face-down ones: pot luck!`, `<span class="zones"><b>Hand</b> → <b>Face up</b> → <b>Blind</b></span>`],
+    ["Magic cards, and the 💩", `${s.twoReset ? "A 2 goes on anything and starts again. " : ""}${s.tenBurn ? "A 10 burns the pile and you go again. " : ""}Get rid of all your cards. Last one still holding cards is the Guffhead.`, `${s.twoReset ? card("2S", { size: "md", s }) : ""}${s.tenBurn ? card("TD", { size: "md", s }) : ""}<span class="bigpoo">💩</span>`],
+  ];
+  let i = 0;
+  const box = document.createElement("div");
+  box.className = "howsheet";
+  const draw = () => {
+    const [t, d, pic] = steps[i];
+    box.innerHTML = `<div class="howcard" role="dialog" aria-label="How it works"><small class="howstep">${i + 1} of ${steps.length}</small><div class="howpic">${pic}</div><h3>${esc(t)}</h3><p>${esc(d)}</p>
+      <div class="howbtns">${i ? `<button class="btn ghost" data-how="back">Back</button>` : `<button class="linkish" data-how="done">Skip</button>`}<button class="btn gold" data-how="${i < steps.length - 1 ? "next" : "done"}">${i < steps.length - 1 ? "Next" : "Got it, let's play"}</button></div></div>`;
+    box.querySelectorAll("[data-how]").forEach((b) => (b.onclick = () => { const k = b.dataset.how; if (k === "done") { box.remove(); store.set("gh:how-seen", 1); } else { i += k === "next" ? 1 : -1; draw(); } }));
+  };
+  draw();
+  document.body.appendChild(box);
 }
 
 /* ---------- the highlights: Guff of the Day (Carl, 14 Nov 2026) ----------
