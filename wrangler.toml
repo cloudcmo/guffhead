@@ -28,6 +28,10 @@ crons = ["*/15 * * * *"]
 [vars]
 VAPID_PUBLIC_KEY = "BMnKXfXkcY1ucPoOUkiCk2LmD_GFvoST9jz6YAQHQCYtAxHX4gSPJg9dk-Vn1zmP6vEitt7Kz4eiSrWDAUltdWg"
 VAPID_SUBJECT = "mailto:carl@mesnerlyons.com"
+# The free Cloudflare bot check on the front door and invite links (14 Nov 2026, widget "Guffhead front door").
+# The site key is public. Its secret is a Worker secret, TURNSTILE_SECRET, set in the dashboard: until it's set the
+# server skips the check (the 200 cap and the per-connection limit still apply).
+TURNSTILE_SITEKEY = "0x4AAAAAAGA1PAcvvWTZCDO9"
 
 [observability]
 enabled = true

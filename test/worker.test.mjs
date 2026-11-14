@@ -140,7 +140,7 @@ const back = await call(`/api/invites/${inv.code}/join`, { token: dave.token, me
 assert.equal(back.game, dave.game, "the guest's phone gets back to the same game");
 const dme = await call("/api/me", { token: dave.token });
 assert.equal(dme.me.guest, true); assert.equal(dme.me.hostName, "Carl"); assert.deepEqual(dme.opponents.map((o) => o.id), ["carl"]);
-assert.equal((await call("/api/invites", { token: dave.token, method: "POST", body: {} })).status, 400, "guests can't invite");
+assert.ok((await call("/api/invites", { token: dave.token, method: "POST", body: {} })).code, "guests can invite their own friends now (14 Nov 2026)");
 const cme = await call("/api/me", { token: carl });
 assert.ok(cme.opponents.find((o) => o.id === dave.me.id && o.guest), "Carl can deal Dave in again");
 const inv2 = await call("/api/invites", { token: carl, method: "POST", body: {} });

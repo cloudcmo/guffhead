@@ -6,6 +6,7 @@
  * the wwg database).
  *
  *   POST /api/login                { name, pin, league? } -> { token, me }
+ *   POST /api/walkin               { name, turnstile? } -> { token, me }: play with just a first name (capped)
  *   POST /api/logout
  *   GET  /api/me                   { me, opponents, house, games, looks, push, build }
  *   GET  /api/games                my games
@@ -28,7 +29,7 @@
  * The cron (wrangler.toml) runs the idle timer: GuffBot plays the go of anyone who's left it too long.
  */
 
-import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, welcomeBack, sweep, nudge, doing, doingAt, logbook, goodNews, makeInvite, inviteInfo, joinInvite, newGuest, highlightsOf, Refusal } from "./game.js";
+import { createGame, getGame, act, again, listGames, viewFor, record, league, seen, presence, hereNow, notify, lazyAutopilot, welcomeBack, sweep, nudge, doing, doingAt, logbook, goodNews, makeInvite, inviteInfo, joinInvite, newGuest, highlightsOf, checkName, seatsTaken, guestRoom, clearOut, GUEST_CAP, Refusal } from "./game.js";
 import { BOTS } from "../public/bot.js";
 import { DEFAULTS } from "../public/rules.js";
 import { sha256, randomToken, findPlayer, opponentsOf, looksFor, setDress } from "./people.js";
@@ -47,9 +48,26 @@ async function me(request, env) {
   const s = await env.DB.prepare(`SELECT player_id FROM gh_sessions WHERE token = ?`).bind(t).first();
   if (!s) return null;
   const p = await findPlayer(env, s.player_id);
-  return p ? { id: p.id, name: p.name, isAdmin: p.isAdmin, guest: !!p.guest, host: p.host || null, token: t } : null;
+  if (p && p.guest) await env.DB.prepare(`UPDATE gh_guests SET last_seen = ? WHERE id = ? AND COALESCE(last_seen, 0) < ?`).bind(Date.now(), p.id, Date.now() - 3600000).run().catch(() => {});
+  return p ? { id: p.id, name: p.name, isAdmin: p.isAdmin, guest: !!p.guest, host: p.host || null, walkin: p.host === "walkin", token: t } : null;
 }
-const hostNameOf = (env) => async (id) => { const p = await findPlayer(env, id); return p ? p.name : id; };
+const hostNameOf = (env) => async (id) => { if (id === "walkin") return null; const p = await findPlayer(env, id); return p ? p.name : id; };
+/** A salted hash of the connection, so one place can't take all the seats. The address itself is never stored. */
+const ipHashOf = (request) => sha256(`guffhead-seat:${request.headers.get("CF-Connecting-IP") || "local"}`);
+/** Cloudflare Turnstile, the free bot check: on when TURNSTILE_SECRET is set, skipped when it isn't (local tests). */
+async function humanCheck(env, token, request) {
+  if (!env.TURNSTILE_SECRET) return true;
+  if (!token) return false;
+  const f = new FormData();
+  f.append("secret", env.TURNSTILE_SECRET); f.append("response", token);
+  const ip = request.headers.get("CF-Connecting-IP"); if (ip) f.append("remoteip", ip);
+  try { const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: f }); const d = await r.json(); return !!d.success; } catch { return false; }
+}
+async function startSession(env, pid) {
+  const token = randomToken();
+  await env.DB.prepare(`INSERT INTO gh_sessions (token, player_id, created_at) VALUES (?, ?, ?)`).bind(token, pid, Date.now()).run();
+  return token;
+}
 
 async function login(request, env) {
   const b = await body(request);
@@ -96,6 +114,8 @@ export default {
   },
   async scheduled(event, env, ctx) {
     ctx.waitUntil(sweep(env).then((n) => { if (n) console.log(`idle timer: GuffBot played ${n} go(es)`); }));
+    const d = new Date(event.scheduledTime || Date.now());
+    if ((d.getUTCHours() === 3 && d.getUTCMinutes() < 15) || env.CLEAROUT_ANYTIME === "1") ctx.waitUntil(clearOut(env).then((r) => console.log(`clear-out: ${JSON.stringify(r)}`)).catch((e) => console.error("clear-out", e)));
   },
 };
 
@@ -123,7 +143,17 @@ const later = (ctx, p) => { if (ctx && ctx.waitUntil) ctx.waitUntil(p.catch((e) 
 
 async function api(request, env, ctx, path, url) {
   const m = request.method;
-  if (path === "/api/health") return json({ ok: true, build: BUILD, note: BUILD_NOTE, push: pushConfigured(env) });
+  if (path === "/api/health") return json({ ok: true, build: BUILD, note: BUILD_NOTE, push: pushConfigured(env), turnstile: env.TURNSTILE_SITEKEY || null });
+  // the front door for anyone (Carl, 14 Nov 2026): a first name, a bot check, a seat if there's one free
+  if (path === "/api/door" && m === "GET") { const n = await seatsTaken(env); return json({ open: n < GUEST_CAP, turnstile: env.TURNSTILE_SITEKEY || null, build: BUILD }); }
+  if (path === "/api/walkin" && m === "POST") {
+    const b = (await body(request)) || {};
+    const name = checkName(b.name);
+    if (!(await humanCheck(env, b.turnstile, request))) return err("Couldn't check you're not a robot. Try again.", 403);
+    const g = await newGuest(env, name, "walkin", await ipHashOf(request));
+    const token = await startSession(env, g.id);
+    return json({ token, me: { id: g.id, name: g.name, guest: true, walkin: true, host: "walkin", hostName: null } });
+  }
   if (path === "/api/login" && m === "POST") return login(request, env);
   // the highlights work without a login, so they can go in the WhatsApp group (Carl, 14 Nov 2026)
   const mh = path.match(/^\/api\/highlights\/([a-z0-9]{6})$/);
@@ -138,17 +168,16 @@ async function api(request, env, ctx, path, url) {
     let token = null;
     if (!joiner) {
       const b = (await body(request)) || {};
-      const name = String(b.name || "").replace(/\s+/g, " ").trim();
-      if (!/^[\p{L}][\p{L} '\-]{0,18}[\p{L}]$/u.test(name)) return err("Just your first name, please (2 to 20 letters)");
+      const name = checkName(b.name);
       const { inv, status } = await inviteInfo(env, mi[1], hostNameOf(env));
       if (status !== "open") return err(status === "used" ? "That invite's been used. Ask for a new one." : "That invite has run out (they last a week). Ask for a new one.");
-      joiner = await newGuest(env, name, inv.host);
-      token = randomToken();
-      await env.DB.prepare(`INSERT INTO gh_sessions (token, player_id, created_at) VALUES (?, ?, ?)`).bind(token, joiner.id, Date.now()).run();
+      if (!(await humanCheck(env, b.turnstile, request))) return err("Couldn't check you're not a robot. Try again.", 403);
+      joiner = await newGuest(env, name, inv.host, await ipHashOf(request));
+      token = await startSession(env, joiner.id);
     }
     const r = await joinInvite(env, mi[1], joiner, hostNameOf(env));
     if (r.st) later(ctx, notify(env, r.st, { status: "playing", required: [joiner.id] }));
-    return json({ game: r.game, token, me: token ? { id: joiner.id, name: joiner.name, guest: true, host: joiner.host, hostName: await hostNameOf(env)(joiner.host) } : undefined });
+    return json({ game: r.game, token, me: token ? { id: joiner.id, name: joiner.name, guest: true, walkin: false, host: joiner.host, hostName: await hostNameOf(env)(joiner.host) } : undefined });
   }
 
   const who = await me(request, env);
@@ -164,10 +193,11 @@ async function api(request, env, ctx, path, url) {
     const ids = [who.id, ...opponents.map((o) => o.id), ...games.flatMap((g) => g.players)];
     const lg = await league(env, who, opponents);
     const news = await goodNews(env, who).catch(() => []);
-    return json({ league: lg, news, me: { id: who.id, name: who.name, isAdmin: who.isAdmin, guest: who.guest, host: who.host, hostName: who.host ? await hostNameOf(env)(who.host) : null }, opponents, house: HOUSE, games, looks: await looksFor(env, ids), defaults: DEFAULTS, push: pushConfigured(env), build: BUILD, note: BUILD_NOTE });
+    return json({ league: lg, news, me: { id: who.id, name: who.name, isAdmin: who.isAdmin, guest: who.guest, walkin: !!who.walkin, host: who.host, hostName: who.host ? await hostNameOf(env)(who.host) : null }, opponents, house: HOUSE, games, looks: await looksFor(env, ids), defaults: DEFAULTS, push: pushConfigured(env), build: BUILD, note: BUILD_NOTE });
   }
   if (path === "/api/games" && m === "GET") return json({ build: BUILD, games: await listGames(env, who) });
   if (path === "/api/games" && m === "POST") {
+    await guestRoom(env, who);
     const st = await createGame(env, who, await body(request), opponentsOf);
     later(ctx, notify(env, st, { status: "playing", required: [who.id] }));
     return json({ game: viewFor(st, who.id) });
@@ -229,6 +259,7 @@ async function api(request, env, ctx, path, url) {
   if (mm && m === "POST") { const st = await nudge(env, who, mm[1]); return json({ ok: true, nudged: st.nudged }); }
   mm = path.match(/^\/api\/games\/([a-z0-9]{6})\/again$/);
   if (mm && m === "POST") {
+    await guestRoom(env, who);
     const r = await again(env, who, mm[1], opponentsOf);
     if (r.st) later(ctx, notify(env, r.st, { status: "playing", required: [] }));
     return json({ id: r.id, existing: r.existing });
@@ -238,6 +269,7 @@ async function api(request, env, ctx, path, url) {
     const st = await getGame(env, who, mm[1]);
     const text = String(((await body(request)) || {}).text || "").replace(/\s+/g, " ").trim().slice(0, 280);
     if (!text) return err("Say something");
+    if (who.guest && /(https?:|www\.|\.(com|net|org|co|io|ru|xyz)\b)/i.test(text)) return err("No links in the chat, please.");
     if (st.players.filter((p) => !st.bots.includes(p)).length < 2) return err("The house doesn't chat. It's concentrating.");
     await env.DB.prepare(`INSERT INTO gh_chat (game_id, player_id, text, created_at) VALUES (?, ?, ?, ?)`).bind(mm[1], who.id, text, Date.now()).run();
     return json({ ok: true });

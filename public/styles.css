@@ -894,3 +894,25 @@ html[data-theme="pub"] .danger, html[data-theme="britpop"] .danger { color: #FFB
 .howpic .bigpoo { font-size: 3rem; }
 .howbtns { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } }
+
+/* ---------- the front door, open to anyone (14 Nov 2026) ---------- */
+.doorhero { display: flex; align-items: center; gap: 12px; text-align: left; margin: 0 0 10px; }
+.doorhero .doorman { flex: none; }
+.doortitle { margin: 0; font: 900 2.2rem/1 var(--display); }
+.doorsub { margin: 6px 0 0; font: 700 1.05rem/1.35 var(--body); }
+.walkin h2 { margin: 0 0 8px; font-size: 1.25rem; }
+.walkin .btn.big { width: 100%; }
+#ts:empty { display: none; }
+#ts { margin: 6px 0; }
+.regulars { margin-top: 12px; text-align: left; }
+.regulars summary { font-weight: 800; cursor: pointer; }
+.regulars .form { margin-top: 10px; }
+.bottomnav a[hidden] { display: none; }
+/* invite a friend from anywhere (14 Nov 2026) */
+.invcard .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.invcard .linkbox { word-break: break-all; background: #F2F4F8; padding: 8px 10px; border-radius: 10px; font-size: .85rem; }
+.invcard .row2 { display: flex; gap: 8px; margin: 8px 0; }
+.gamebar .invbar { background: var(--gold); color: #fff; }
+html[data-theme="pub"] .gamebar .invbar, html[data-theme="britpop"] .gamebar .invbar { color: var(--ink); }
+.nexttoast.joined { top: calc(8px + env(safe-area-inset-top)); bottom: auto; background: #1F9D5B; border-color: #1F9D5B; }
+.nexttoast.joined a, .nexttoast.joined .arrow, .nexttoast.joined .x { color: #fff; }

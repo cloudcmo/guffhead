@@ -460,7 +460,10 @@ export const INVITE_DAYS = 7;
 const newCode = () => { const c = "abcdefghjkmnpqrstuvwxyz23456789"; const a = new Uint8Array(8); crypto.getRandomValues(a); return [...a].map((x) => c[x % c.length]).join(""); };
 
 export async function makeInvite(env, who, body) {
-  if (who.guest) no("Guests can't send invites. Ask whoever invited you.");
+  if (who.guest) {
+    const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM gh_invites WHERE host = ? AND used_by IS NULL AND created_at > ?`).bind(who.id, now() - INVITE_DAYS * 86400000).first();
+    if (r && r.n >= GUEST_INVITES) no(`You've got ${GUEST_INVITES} invites out already. Give them a chance to answer.`);
+  }
   const bots = Array.isArray(body && body.players) ? [...new Set(body.players.map(String))].filter(isBot).slice(0, 2) : [];
   const code = newCode();
   await env.DB.prepare(`INSERT INTO gh_invites (code, host, bots, settings, created_at) VALUES (?, ?, ?, ?, ?)`)
@@ -472,7 +475,9 @@ export async function inviteInfo(env, code, hostName) {
   const inv = await env.DB.prepare(`SELECT code, host, bots, settings, created_at, used_by, game_id FROM gh_invites WHERE code = ?`).bind(code).first();
   if (!inv) no("That invite link doesn't work. Ask for a new one.", 404);
   const status = inv.used_by ? "used" : now() - inv.created_at > INVITE_DAYS * 86400000 ? "expired" : "open";
-  return { inv, status, out: { code, host: inv.host, hostName: await hostName(inv.host), bots: inv.bots ? inv.bots.split(",") : [], rules: R.describeRules(JSON.parse(inv.settings)), status } };
+  // once it's used: which game, and who joined (so the inviter's phone can say "Sam has joined your game!")
+  const joined = status === "used" && inv.used_by ? { game: inv.game_id, joiner: await hostName(inv.used_by) } : {};
+  return { inv, status, out: { code, host: inv.host, hostName: await hostName(inv.host), bots: inv.bots ? inv.bots.split(",") : [], rules: R.describeRules(JSON.parse(inv.settings)), status, ...joined } };
 }
 
 /**
@@ -497,11 +502,78 @@ export async function joinInvite(env, code, joiner, hostName) {
   return { game: st.id, st, existing: false };
 }
 
-export async function newGuest(env, name, host) {
+/* ---------- open to anyone (Carl, 14 Nov 2026): walk-ins and guests, a cap, limits, and the nightly clear-out ---------- */
+export const GUEST_CAP = 200;              // walk-ins and invited guests together; the regulars don't count
+const PER_CONNECTION_DAY = 3;              // new seats one connection can take in a day
+export const GUEST_GAMES = 5;              // live games a guest can have going
+const GUEST_INVITES = 5;                   // open invites a guest can have out
+const RUDE = /\b(fuck|shit|cunt|twat|wank|nigg|fag|rape|nazi|hitler|porn|sex|cock|dick|pussy|bitch|whore|slut|paki|retard)/i;
+export function checkName(raw) {
+  const name = String(raw || "").replace(/\s+/g, " ").trim();
+  if (!/^[\p{L}][\p{L} '\-]{0,18}[\p{L}]$/u.test(name)) no("Just your first name, please (2 to 20 letters)");
+  if (RUDE.test(name.replace(/[\s'\-]/g, ""))) no("Pick another name. This is a family pub. Mostly.");
+  return name;
+}
+export async function seatsTaken(env) {
+  const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM gh_guests`).first();
+  return r ? r.n : 0;
+}
+export async function newGuest(env, name, host, ipHash = null) {
+  if ((await seatsTaken(env)) >= GUEST_CAP) no("The back room's full tonight. Try again in a few days, or ask a regular to deal you in.", 403);
+  if (ipHash) {
+    const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM gh_guests WHERE ip_hash = ? AND created_at > ?`).bind(ipHash, now() - 86400000).first();
+    if (r && r.n >= PER_CONNECTION_DAY) no("That's enough new players from here for today. Come back tomorrow.", 429);
+  }
   const a = new Uint8Array(6); crypto.getRandomValues(a);
   const id = `gh-g-${[...a].map((b) => b.toString(36)).join("").slice(0, 10)}`;
-  await env.DB.prepare(`INSERT INTO gh_guests (id, name, host, created_at) VALUES (?, ?, ?, ?)`).bind(id, name, host, now()).run();
+  await env.DB.prepare(`INSERT INTO gh_guests (id, name, host, created_at, last_seen, ip_hash) VALUES (?, ?, ?, ?, ?, ?)`).bind(id, name, host, now(), now(), ipHash).run();
   return { id, name, guest: true, host };
+}
+async function liveGamesOf(env, pid) {
+  const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM gh_game_players p JOIN gh_games g ON g.id = p.game_id WHERE p.player_id = ? AND g.status = 'playing'`).bind(pid).first();
+  return r ? r.n : 0;
+}
+export async function guestRoom(env, who) {
+  if (who.guest && (await liveGamesOf(env, who.id)) >= GUEST_GAMES) no(`You've got ${GUEST_GAMES} games on the go. Finish one first.`);
+}
+
+/** Once a night: let go of guests nobody's seen for 30 days, dead invites, and games only guests were in. Never
+ *  touches the regulars, the shared logins (players, memberships) or any other game's tables. */
+export async function clearOut(env) {
+  const t = now(), day = 86400000;
+  const isRegular = `p.player_id NOT LIKE 'gh-g-%' AND p.player_id NOT IN ('guffbot', 'msguffbot')`;
+  const out = {};
+  // games with no regulars: abandoned for 14 days, or finished more than 90 days ago
+  const dead = await env.DB.prepare(`SELECT g.id FROM gh_games g WHERE NOT EXISTS (SELECT 1 FROM gh_game_players p WHERE p.game_id = g.id AND ${isRegular})
+      AND ((g.status = 'playing' AND g.updated_at < ?) OR (g.status = 'finished' AND g.updated_at < ?)) LIMIT 300`).bind(t - 14 * day, t - 90 * day).all();
+  const ids = dead.results.map((r) => r.id);
+  for (let i = 0; i < ids.length; i += 90) {   // D1 takes at most 100 values in one statement
+    const part = ids.slice(i, i + 90), q = part.map(() => "?").join(",");
+    await env.DB.batch(["gh_chat", "gh_seen", "gh_doing", "gh_game_players"].map((tb) => env.DB.prepare(`DELETE FROM ${tb} WHERE game_id IN (${q})`).bind(...part))
+      .concat([env.DB.prepare(`DELETE FROM gh_results WHERE game_id IN (${q})`).bind(...part), env.DB.prepare(`DELETE FROM gh_games WHERE id IN (${q})`).bind(...part)]));
+  }
+  out.games = ids.length;
+  // guests not seen for 30 days (not in a live game with a regular, who'd miss them)
+  const gone = await env.DB.prepare(`SELECT id FROM gh_guests WHERE COALESCE(last_seen, created_at) < ?
+      AND id NOT IN (SELECT p.player_id FROM gh_game_players p JOIN gh_games g ON g.id = p.game_id WHERE g.status = 'playing') LIMIT 300`).bind(t - 30 * day).all();
+  const gids = gone.results.map((r) => r.id);
+  for (let i = 0; i < gids.length; i += 90) {
+    const part = gids.slice(i, i + 90), q = part.map(() => "?").join(",");
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM gh_sessions WHERE player_id IN (${q})`).bind(...part),
+      env.DB.prepare(`DELETE FROM gh_push WHERE player_id IN (${q})`).bind(...part),
+      env.DB.prepare(`DELETE FROM gh_prefs WHERE player_id IN (${q})`).bind(...part),
+      env.DB.prepare(`DELETE FROM gh_invites WHERE host IN (${q}) AND used_by IS NULL`).bind(...part),
+      env.DB.prepare(`DELETE FROM gh_guests WHERE id IN (${q})`).bind(...part),
+    ]);
+  }
+  out.guests = gids.length;
+  // invite links: a week to use, then gone after a month
+  const inv = await env.DB.prepare(`DELETE FROM gh_invites WHERE created_at < ?`).bind(t - 30 * day).run();
+  out.invites = (inv.meta && inv.meta.changes) || 0;
+  // logins left on phones by guests who've gone
+  await env.DB.prepare(`DELETE FROM gh_sessions WHERE player_id LIKE 'gh-g-%' AND player_id NOT IN (SELECT id FROM gh_guests)`).run();
+  return out;
 }
 
 /* ---------- the actions, with the database ---------- */

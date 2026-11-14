@@ -49,10 +49,14 @@ async function namesFor(env, ids) {
  */
 export async function opponentsOf(env, pid) {
   if (isGuestId(pid)) {
+    // a guest plays whoever invited them (a walk-in has nobody) and anyone they've invited themselves
     const g = await env.DB.prepare(`SELECT host FROM gh_guests WHERE id = ?`).bind(pid).first();
     if (!g) return [];
-    const names = await namesFor(env, [g.host]);
-    return [{ id: g.host, name: names[g.host] }];
+    const out = [];
+    if (g.host && g.host !== "walkin") { const names = await namesFor(env, [g.host]); out.push({ id: g.host, name: names[g.host] }); }
+    const mine = await env.DB.prepare(`SELECT id, name FROM gh_guests WHERE host = ? ORDER BY created_at DESC LIMIT 12`).bind(pid).all();
+    for (const x of mine.results) out.push({ id: x.id, name: x.name, guest: true });
+    return out;
   }
   const ids = new Set();
   const league = await env.DB.prepare(

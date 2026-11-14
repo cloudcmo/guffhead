@@ -261,29 +261,68 @@ function nav(h) {
   badge(waitingOnMe(S.games));
 }
 
-/* ---------- the door ---------- */
-function renderLogin() {
+/* ---------- the door (open to anyone, Carl, 14 Nov 2026) ----------
+   Strangers play straight away with a first name: GuffBot and Ms GuffBot are always in, and they can invite a
+   friend. The regulars log in below as before. A free Cloudflare bot check sits in front when it's switched on. */
+let TS = { key: null, token: null, id: null };
+async function botCheck(el) {
+  TS.token = null;
+  if (!TS.key || !el) return;
+  if (!window.turnstile) await new Promise((res) => { const sc = document.createElement("script"); sc.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"; sc.onload = res; sc.onerror = res; document.head.appendChild(sc); });
+  if (!window.turnstile) return;
+  try { TS.id = window.turnstile.render(el, { sitekey: TS.key, size: "flexible", appearance: "interaction-only", callback: (t) => { TS.token = t; }, "expired-callback": () => { TS.token = null; } }); } catch {}
+}
+const resetBotCheck = () => { try { if (window.turnstile && TS.id != null) window.turnstile.reset(TS.id); } catch {} TS.token = null; };
+async function renderLogin() {
   $("app").innerHTML = `
     <section class="door">
-      <div class="doorman">${dressed("guffbot", seedOf(tonight()), 170) || headOf("guffbot", 120)}</div>
-      <p class="patter">"Evening. Card game's in the back room. Same name and PIN as Words and Guff."</p>
-      <form id="loginForm" class="card-panel form" autocomplete="on">
+      <div class="doorhero">
+        <div class="doorman">${dressed("guffbot", seedOf(tonight()), 150) || headOf("guffbot", 110)}</div>
+        <div><h1 class="doortitle">Guffhead</h1><p class="doorsub">Shithead, the card game, on your phone. Play GuffBot now, then take on your mates at your own pace.</p></div>
+      </div>
+      <form id="walkinForm" class="card-panel form walkin" autocomplete="on">
+        <h2>New here? Play now</h2>
+        <label>Your first name <input id="wname" maxlength="20" autocomplete="given-name" autocapitalize="words" placeholder="First name" required></label>
+        <div id="ts"></div>
+        <button class="btn gold big" type="submit" id="walkinBtn">Deal me in ▸</button>
+        <p class="small soft">No email, no password. You'll play GuffBot and Ms GuffBot first, and you can invite a friend from your tables.</p>
+        <p class="err" id="walkinErr" hidden></p>
+      </form>
+      <details class="card-panel regulars"${store.get("gh:was-regular") ? " open" : ""}><summary>Got a Guff login?</summary>
+      <form id="loginForm" class="form" autocomplete="on">
         <label>Name <input id="name" name="username" autocomplete="username" autocapitalize="none" required></label>
         <label>PIN <input id="pin" name="password" type="password" inputmode="numeric" autocomplete="current-password" required></label>
         <details><summary>In a private league?</summary><label>League code <input id="league" autocapitalize="characters"></label></details>
         <button class="btn gold" type="submit">Pull up a stool</button>
         <p class="err" id="loginErr" hidden></p>
-      </form>
-      <p class="small soft">The card game with the rude name, for two to four, at your own pace.</p>
+      </form></details>
+      <details class="howto"><summary>How to play</summary><p>Everyone gets three cards face down, three face up and three in hand. Play a card the same or higher than the top of the pile, or pick the whole pile up. Get rid of all your cards. The last one holding cards is the Guffhead, and wears the 💩 until someone else loses.</p></details>
     </section>`;
   $("loginForm").onsubmit = async (e) => {
     e.preventDefault();
     try {
       const r = await api("/login", { method: "POST", body: { name: $("name").value, pin: $("pin").value, league: ($("league") || {}).value || "" } });
-      S.token = r.token; S.me = r.me; store.set("gh:token", r.token); store.set("gh:me", r.me);
+      S.token = r.token; S.me = r.me; store.set("gh:token", r.token); store.set("gh:me", r.me); store.set("gh:was-regular", 1);
       route();
     } catch (er) { const x = $("loginErr"); x.textContent = er.message; x.hidden = false; }
   };
+  $("walkinForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const x = $("walkinErr"); x.hidden = true;
+    if (TS.key && !TS.token) { x.textContent = "Just a second, checking you're not a robot…"; x.hidden = false; return; }
+    $("walkinBtn").disabled = true;
+    try {
+      const r = await api("/walkin", { method: "POST", body: { name: $("wname").value, turnstile: TS.token } });
+      S.token = r.token; S.me = r.me; store.set("gh:token", r.token); store.set("gh:me", r.me);
+      location.hash = "#/"; route();
+    } catch (er) { x.textContent = er.message; x.hidden = false; $("walkinBtn").disabled = false; resetBotCheck(); }
+  };
+  try {
+    const d = await api("/door");
+    TS.key = d.turnstile;
+    if (!d.open) { $("walkinForm").innerHTML = `<h2>The back room's full</h2><p>We've got as many guests as the pub can hold right now. Try again in a few days, or ask a friend who plays to invite you.</p>`; return; }
+    botCheck($("ts"));
+  } catch {}
 }
 
 /* ---------- the lobby ---------- */
@@ -304,9 +343,9 @@ async function renderLobby() {
     <section class="lobby">
       <div class="welcome">
         <div class="landlord">${headOf("guffbot", 74)}</div>
-        <p class="patter">"${esc(say("hello", seedOf(tonight() + S.me.id), { name: S.me.name }))}"</p>
+        <p class="patter">"${esc(say("hello", S.me.guest && !r.games.length ? 0 : seedOf(tonight() + S.me.id), { name: S.me.name }))}"</p>
       </div>
-      ${S.me.guest ? `<p class="card-panel guestnote">You're ${esc(S.me.hostName || "a friend")}'s guest. Want your own login for all the Guff games? Ask ${esc(S.me.hostName || "them")}.</p>` : ""}
+      ${S.me.walkin ? `<p class="card-panel guestnote">Welcome, ${esc(S.me.name)}. Deal a game against GuffBot and Ms GuffBot below, or invite a friend: if they like Shithead, they'll like this. This phone remembers you.</p>` : S.me.guest ? `<p class="card-panel guestnote">You're ${esc(S.me.hostName || "a friend")}'s guest. Deal them another game below, or invite someone of your own. This phone remembers you.</p>` : ""}
       ${newsLine(r.news)}
       ${S.me.guest ? "" : leagueSnippet(r.league)}
       <h2>Your tables</h2>
@@ -342,9 +381,9 @@ async function renderLobby() {
         <button class="btn gold" id="deal" ${n >= 1 && n <= MAX_PLAYERS - 1 ? "" : "disabled"}>${n < 1 ? "Pick who you're playing" : n > MAX_PLAYERS - 1 ? "Three at most with you" : `Deal for ${n + 1}`}</button>
       </div>
 
-      ${S.me.guest ? "" : `<h2>Invite anyone</h2>
+      ${`<h2>Invite a friend</h2>
       <div class="card-panel invite">
-        <p class="small">Send a link to anyone, by WhatsApp or text. They type their name and they're straight into a game with you: no login, no PIN. ${NEW.crew.filter(isHouse).length ? `${esc(NEW.crew.filter(isHouse).map(nameOf).join(" and "))} will play too.` : "Pick GuffBot or Ms GuffBot above to seat them too."} Same house rules as above. Guest games don't count in the 💩 league.</p>
+        <p class="small">Send a link to anyone, by WhatsApp or text. They type their name and they're straight into a game with you: no login, no PIN. ${NEW.crew.filter(isHouse).length ? `${esc(NEW.crew.filter(isHouse).map(nameOf).join(" and "))} will play too.` : "Pick GuffBot or Ms GuffBot above to seat them too."} Same house rules as above. ${S.me.guest ? "" : "Guest games don't count in the 💩 league."}</p>
         <button class="btn gold" id="invite">📨 Make an invite link</button>
         <div id="inviteOut"></div>
       </div>`}
@@ -369,7 +408,11 @@ async function renderLobby() {
   if ($("invite")) $("invite").onclick = () => makeInvite();
   wireWardrobe();
   wireLooks();
-  $("logout").onclick = async () => { try { await api("/logout", { method: "POST" }); } catch {} logout(); };
+  // a guest has no PIN, so leaving really is goodbye: ask twice
+  $("logout").onclick = async () => {
+    if (S.me.guest && !$("logout").dataset.sure) { $("logout").dataset.sure = 1; $("logout").textContent = `Sure? Tap again. Without a login you can't come back as ${S.me.name}`; return; }
+    try { await api("/logout", { method: "POST" }); } catch {} logout();
+  };
   app.querySelectorAll("[data-nudge]").forEach((b) => (b.onclick = async (e) => {
     e.preventDefault(); e.stopPropagation();
     try { await api(`/games/${b.dataset.nudge}/nudge`, { method: "POST" }); toast("Nudged. They'll get a tap on the shoulder."); buzz(20); renderLobby(); } catch (er) { toast(er.message); }
@@ -528,18 +571,78 @@ function tableRow(g) {
   const place = mine > 0 ? 1 + liveLeft.filter(([p, n]) => p !== S.me.id && n < mine).length : 0;
   const worst = mine > 0 && liveLeft.length > 1 && liveLeft.every(([p, n]) => p === S.me.id || n < mine);
   const standing = g.status !== "playing" || g.phase !== "play" ? "" : mine === 0 ? `<small class="standing safe">You're out: safe</small>` : worst ? `<small class="standing danger"><i>💩</i> You're in danger</small>` : place === 1 ? `<small class="standing good">You're winning</small>` : "";
-  return `<a class="tablerow${g.myGo ? " go" : ""}" href="#/game/${g.id}">${thumb}<span class="who"><span class="heads">${heads}</span>${who}<small>${what}</small>${g.last && g.status === "playing" ? `<small class="lastline">${esc(g.last)}</small>` : ""}${extra}${standing}</span></span><span class="sc">${g.status === "playing" ? `${mine}<small>to go</small>` : g.loser === S.me.id ? "💩" : "😅"}</span></a>`;
+  return `<a class="tablerow${g.myGo ? " go" : ""}" href="#/game/${g.id}">${thumb}<span class="who"><span class="heads">${heads}</span>${who}<small>${what}</small>${g.last && g.status === "playing" ? `<small class="lastline">${esc(g.last)}</small>` : ""}${extra}${standing}</span><span class="sc">${g.status === "playing" ? `${mine}<small>to go</small>` : g.loser === S.me.id ? "💩" : "😅"}</span></a>`;
 }
 
 function ago(t) { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; }
 
+/** Invite a friend from anywhere (Carl, 14 Nov 2026: "at any point they should be able to invite a friend"): a
+ *  two-player game by default, a unique link, and you're told the moment they're in. */
+function inviteSheet() {
+  const box = document.createElement("div");
+  box.className = "howsheet";
+  let bots = [];
+  const draw = (out = "") => {
+    box.innerHTML = `<div class="howcard invcard" role="dialog" aria-label="Invite a friend"><h3>📨 Take on a friend</h3>
+      <p>Send a link by WhatsApp or text. They type their first name and they're straight into a game of Shithead with you. No login, no app.</p>
+      <div class="chips"><button class="chip${bots.length ? "" : " on"}" data-who="two">Just the two of us</button><button class="chip${bots.length ? " on" : ""}" data-who="bots">Bring GuffBot and Ms GuffBot</button></div>
+      <div id="invOut2">${out}</div>
+      <div class="howbtns"><button class="linkish" data-x>Close</button>${out ? "" : `<button class="btn gold" id="invMake">Make the link</button>`}</div></div>`;
+    box.querySelector("[data-x]").onclick = () => box.remove();
+    box.querySelectorAll("[data-who]").forEach((b) => (b.onclick = () => { bots = b.dataset.who === "bots" ? ["guffbot", "msguffbot"] : []; draw(out); }));
+    const mk = box.querySelector("#invMake");
+    if (mk) mk.onclick = () => { mk.disabled = true; makeInvite({ bots, after: (html) => draw(html) }).finally(() => { mk.disabled = false; }); };
+  };
+  box.onclick = (e) => { if (e.target === box) box.remove(); };
+  draw();
+  document.body.appendChild(box);
+}
+/** Invites I've sent, watched until someone joins (the link is public, so this is just a quiet check every 15s). */
+function watchInvite(code) {
+  const list = (store.get("gh:invites-out") || []).filter((x) => Date.now() - x.t < 7 * 86400000);
+  list.push({ code, t: Date.now() });
+  store.set("gh:invites-out", list.slice(-10));
+  checkInvites();
+}
+async function checkInvites() {
+  clearTimeout(checkInvites.t);
+  const list = (store.get("gh:invites-out") || []).filter((x) => Date.now() - x.t < 7 * 86400000);
+  if (!list.length || !S.token) return;
+  if (!document.hidden) {
+    const keep = [];
+    for (const x of list) {
+      try {
+        const inv = (await api(`/invites/${x.code}`)).invite;
+        if (inv.status === "used" && inv.game) { joinedToast(inv); continue; }
+        if (inv.status === "open") keep.push(x);
+      } catch { /* gone */ }
+    }
+    store.set("gh:invites-out", keep);
+    if (!keep.length) return;
+  }
+  checkInvites.t = setTimeout(checkInvites, 15000);
+}
+function joinedToast(inv) {
+  buzz([40, 30, 40]);
+  const t = document.createElement("div");
+  t.className = "nexttoast joined";
+  t.innerHTML = `<a href="#/game/${inv.game}"><b>🎉 ${esc(inv.joiner || "Your friend")} has joined your game!</b> <span class="arrow">Play ▸</span></a><button class="x" aria-label="Dismiss">×</button>`;
+  document.body.appendChild(t);
+  t.querySelector(".x").onclick = () => t.remove();
+  t.querySelector("a").onclick = () => t.remove();
+  setTimeout(() => t.remove(), 30000);
+  if (location.hash === "#/" || location.hash === "") renderLobby();
+}
+
 /** An invite link anyone can use, sent with the phone's Share sheet (or copied). */
-async function makeInvite() {
+async function makeInvite(o = {}) {
   try {
-    const r = await api("/invites", { method: "POST", body: { players: NEW.crew.filter(isHouse), settings: NEW.rules } });
+    const r = await api("/invites", { method: "POST", body: { players: o.bots || NEW.crew.filter(isHouse), settings: NEW.rules } });
+    watchInvite(r.code);
     r.url = `${location.origin}/#/join/${r.code}`;
-    const text = `Fancy a hand of Guffhead with me? It's the card game with the rude name. Tap to join, no login needed:`;
-    $("inviteOut").innerHTML = `<p class="linkbox"><span>${esc(r.url)}</span></p><div class="row2"><button class="btn small gold" id="invShare">📣 Share it</button><button class="btn small ghost" id="invCopy">Copy link</button></div><p class="small soft">Works once, for one person, for a week. When they join, the game turns up in your tables.</p>`;
+    const text = `Fancy a game of Shithead with me? It's called Guffhead, it's on your phone and you play at your own pace. Tap to join, no login needed:`;
+    const html = `<p class="linkbox"><span>${esc(r.url)}</span></p><div class="row2"><button class="btn small gold" id="invShare">📣 Share it</button><button class="btn small ghost" id="invCopy">Copy link</button></div><p class="small soft">Works once, for one person, for a week. We'll tell you the moment they join.</p>`;
+    if (o.after) o.after(html); else $("inviteOut").innerHTML = html;
     $("invCopy").onclick = async () => { try { await navigator.clipboard.writeText(`${text} ${r.url}`); toast("Copied. Paste it into a message."); } catch { toast(r.url, 6000); } };
     $("invShare").onclick = async () => { try { if (navigator.share) await navigator.share({ text, url: r.url }); else { await navigator.clipboard.writeText(`${text} ${r.url}`); toast("Copied. Paste it into a message."); } } catch {} };
     if (navigator.share) { try { await navigator.share({ text, url: r.url }); } catch {} }
@@ -559,11 +662,11 @@ async function renderJoin(code) {
   else if (inv.status === "used" && !mine) action = `<p class="patter">This invite's been used. Ask ${esc(inv.hostName)} for a new one.</p>`;
   else if (isHost && inv.status === "open") action = `<p class="patter">This is your own invite link. Send it to someone: whoever opens it first gets the seat.</p><p class="foot"><a href="#/">Back to your tables</a></p>`;
   else if (mine) action = `<button class="btn gold big" id="joinMe">${inv.status === "used" ? "To the game ▸" : `Pull up a stool as ${esc(S.me.name)}`}</button>`;
-  else action = `<form id="joinForm" class="card-panel form"><label>What's your name? <input id="gname" maxlength="20" autocomplete="given-name" autocapitalize="words" required placeholder="First name"></label><button class="btn gold" type="submit">Pull up a stool</button><p class="err" id="joinErr" hidden></p></form>`;
+  else action = `<form id="joinForm" class="card-panel form"><label>What's your name? <input id="gname" maxlength="20" autocomplete="given-name" autocapitalize="words" required placeholder="First name"></label><div id="ts"></div><button class="btn gold" type="submit">Pull up a stool</button><p class="err" id="joinErr" hidden></p></form>`;
   $("app").innerHTML = `
     <section class="door join">
       <div class="doorman">${dressed("guffbot", seedOf(code), 150) || headOf("guffbot", 110)}</div>
-      <p class="patter"><b>${esc(inv.hostName)}</b> has saved you a seat in the back room for a hand of Guffhead${others.length ? `, with ${esc(others.join(" and "))}` : ""}.</p>
+      <p class="patter"><b>${esc(inv.hostName)}</b> wants a game of Shithead with you${others.length ? `, with ${esc(others.join(" and "))}` : ""}. We call it Guffhead. No app, no login: just your first name.</p>
       ${action}
       <details class="howto"><summary>How to play</summary>
         <p>Everyone gets three cards face down, three face up and three in hand. Play a card at least as high as the top of the pile, or pick the whole pile up. Get rid of all your cards. The last one holding cards is the Guffhead, and wears the 💩 until someone else loses.</p>
@@ -571,14 +674,15 @@ async function renderJoin(code) {
         <p>It's played at your own pace: take your go whenever you like, and come back to this link on this phone to carry on.</p>
       </details>
     </section>`;
+  if ($("joinForm")) { try { TS.key = (await api("/door")).turnstile; botCheck($("ts")); } catch {} }
   const go = async (name) => {
-    const r = await api(`/invites/${code}/join`, { method: "POST", body: { name } });
+    const r = await api(`/invites/${code}/join`, { method: "POST", body: { name, turnstile: TS.token } });
     if (r.token) { S.token = r.token; S.me = r.me; store.set("gh:token", r.token); store.set("gh:me", r.me); }
     shuffleSound();
     location.hash = `#/game/${r.game}`;
   };
   if ($("joinMe")) $("joinMe").onclick = () => go().catch((e) => toast(e.message));
-  if ($("joinForm")) $("joinForm").onsubmit = (e) => { e.preventDefault(); go($("gname").value).catch((er) => { const x = $("joinErr"); x.textContent = er.message; x.hidden = false; }); };
+  if ($("joinForm")) $("joinForm").onsubmit = (e) => { e.preventDefault(); go($("gname").value).catch((er) => { const x = $("joinErr"); x.textContent = er.message; x.hidden = false; resetBotCheck(); }); };
 }
 
 async function start(body) {
@@ -924,7 +1028,7 @@ function renderGame(staging = false) {
         <div class="tabpanel" id="tabpanel">${S.sheet ? tabPanel(G) : ""}</div>
         ${extras}
       </div>
-      <nav class="gamebar" aria-label="More">${chatty ? `<button data-sheet="chat">💬 Chat${unread() ? ` <span class="count">${unread()}</span>` : ""}</button>` : ""}<button data-sheet="log">📜 Log</button><button data-sheet="rules">📏 Rules</button><button data-sheet="table">🪑 Table</button></nav>`
+      <nav class="gamebar" aria-label="More">${chatty ? `<button data-sheet="chat">💬 Chat${unread() ? ` <span class="count">${unread()}</span>` : ""}</button>` : ""}<button data-sheet="log">📜 Log</button><button data-sheet="rules">📏 Rules</button><button class="invbar" id="inviteGame">📨 Invite</button></nav>`
       : `${extras}${tabs}<div class="tabpanel" id="tabpanel">${tabPanel(G)}</div>`}
       <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a><br><small class="soft">Tonight's wallpaper: ${esc(pickPaper(seedOf(G.id), S.theme).name.toLowerCase())}</small></p>
     </section>`;
@@ -1219,10 +1323,11 @@ function finalCard(G) {
     <div class="endbtns">
       ${G.watching ? "" : G.next ? `<a class="btn gold" href="#/game/${G.next}">To the next game ▸</a>` : `<button class="btn gold" id="again">Deal again${G.loser && !isHouse(G.loser) && G.loser !== S.me.id ? ` (${esc(names[G.loser])} deals)` : ""}</button>`}
       <a class="btn tvbtn" href="#/highlights/${G.id}">📺 Watch the highlights</a>
+      ${G.watching ? "" : `<button class="btn ghost" id="inviteEnd">📨 Take on a friend: send an invite</button>`}
       <div class="row2"><a class="btn ghost" href="#/replay/${G.id}">📼 Watch the replay</a>${G.watching ? "" : `<button class="btn ghost" id="shareGame">📣 Share</button>`}</div>
     </div>
     <p class="small soft">${human.length > 1 ? (G.reigning && G.reigning !== G.loser ? `The 💩 passes from ${esc(names[G.reigning])} to ${esc(names[G.loser])}.` : G.reigning === G.loser ? `${esc(names[G.loser])} keeps the 💩. Again.` : `${esc(names[G.loser])} wears the 💩 until someone else loses.`) : "Practice against the house: it's in your record, not the league."}</p>
-    ${S.me.guest ? `<p class="guestnote">Enjoyed that? ${esc(S.me.hostName || "Your host")} can deal you another, or ask them for your own login to all the Guff games.</p>` : ""}
+    ${S.me.guest ? `<p class="guestnote">Enjoyed that? Deal again, or invite a friend from your tables: anyone who likes Shithead will like this.</p>` : ""}
     ${crackerHtml(G)}
   </div>`;
 }
@@ -1422,6 +1527,7 @@ function wireGame() {
   }));
   const openSheet = (tab) => { S.tab = tab; S.sheet = true; if (tab === "chat") markRead(); renderGame(); if (tab === "chat") setTimeout(() => { const i = $("chatText"); if (i) i.focus(); }, 250); };
   app.querySelectorAll("[data-sheet]").forEach((b) => (b.onclick = () => openSheet(b.dataset.sheet)));
+  if ($("inviteGame")) $("inviteGame").onclick = () => inviteSheet();
   const shut = () => { S.sheet = false; renderGame(); };
   if ($("sheetClose")) $("sheetClose").onclick = shut;
   if ($("sheetback")) $("sheetback").onclick = shut;
@@ -1431,6 +1537,7 @@ function wireGame() {
   app.querySelectorAll("[data-emoji]").forEach((b) => (b.onclick = () => sendChat(b.dataset.emoji)));
   app.querySelectorAll("[data-throw]").forEach((b) => (b.onclick = () => sendChat(`[e:${b.dataset.seq}] ${b.dataset.throw}`)));
   if ($("shareGame")) $("shareGame").onclick = () => shareBoard(G);
+  if ($("inviteEnd")) $("inviteEnd").onclick = () => inviteSheet();
   if ($("shareMoment")) $("shareMoment").onclick = () => shareMoment(G, $("shareMoment").dataset.what);
   wireCracker(G);
   if ($("pickBtn")) $("pickBtn").onclick = () => doAct({ act: "pickup" });
@@ -2067,3 +2174,5 @@ if (XMAS) {
   }
 }
 route();
+checkInvites();
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkInvites(); });
