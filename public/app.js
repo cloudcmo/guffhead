@@ -2113,7 +2113,7 @@ async function renderAdmin() {
     const gs = d.guests.filter((g) => soon(g.due)).sort((a, b) => a.due - b.due), gm = d.games.filter((g) => soon(g.due)).sort((a, b) => a.due - b.due);
     body = gs.length || gm.length ? `${gs.length ? `<h3>Guests</h3>${gs.map(guestCard).join("")}` : ""}${gm.length ? `<h3>Games</h3>${gm.map(gameCard).join("")}` : ""}` : `<p class="soft">Nothing is due to be cleared in the next week.</p>`;
   } else if (A.tab === "players") {
-    const gs = d.guests.filter((g) => match(g.name)), rs = d.regulars.filter((r) => match(r.name));
+    const gs = d.guests.filter((g) => match(g.name)), rs = d.regulars.filter((r) => r.id !== S.me.id && match(r.name));
     body = `<h3>Guests (${d.guests.length} of ${d.cap})</h3>${gs.map(guestCard).join("") || `<p class="soft">No guests yet.</p>`}<h3>Regulars</h3>${rs.map(regCard).join("") || `<p class="soft">None.</p>`}`;
   } else {
     const gm = d.games.filter((g) => match(g.players.map((p) => p.name).join(" ")));
