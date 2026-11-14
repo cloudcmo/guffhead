@@ -87,7 +87,8 @@ CREATE TABLE IF NOT EXISTS gh_guests (
   host       TEXT NOT NULL,            -- who invited them, or 'walkin'
   created_at INTEGER NOT NULL,
   last_seen  INTEGER,
-  ip_hash    TEXT
+  ip_hash    TEXT,
+  keep       INTEGER                   -- 1: Carl kept them from the admin page, the clear-out leaves them alone
 );
 CREATE INDEX IF NOT EXISTS gh_guests_host ON gh_guests (host);
 -- Walk-ins (14 Nov 2026): anyone can play with just a first name (host = 'walkin'). last_seen drives the nightly
@@ -95,6 +96,7 @@ CREATE INDEX IF NOT EXISTS gh_guests_host ON gh_guests (host);
 -- On the live database these were added with ALTER TABLE gh_guests ADD COLUMN ...
 --   last_seen  INTEGER
 --   ip_hash    TEXT
+--   keep       INTEGER   (14 Nov 2026, the admin page)
 CREATE INDEX IF NOT EXISTS gh_guests_ip ON gh_guests (ip_hash, created_at);
 
 -- Invite links: one link, one guest, a week to use it

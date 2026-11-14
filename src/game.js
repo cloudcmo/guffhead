@@ -554,7 +554,7 @@ export async function clearOut(env) {
   }
   out.games = ids.length;
   // guests not seen for 30 days (not in a live game with a regular, who'd miss them)
-  const gone = await env.DB.prepare(`SELECT id FROM gh_guests WHERE COALESCE(last_seen, created_at) < ?
+  const gone = await env.DB.prepare(`SELECT id FROM gh_guests WHERE COALESCE(last_seen, created_at) < ? AND COALESCE(keep, 0) = 0
       AND id NOT IN (SELECT p.player_id FROM gh_game_players p JOIN gh_games g ON g.id = p.game_id WHERE g.status = 'playing') LIMIT 300`).bind(t - 30 * day).all();
   const gids = gone.results.map((r) => r.id);
   for (let i = 0; i < gids.length; i += 90) {

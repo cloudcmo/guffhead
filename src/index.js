@@ -34,6 +34,7 @@ import { BOTS } from "../public/bot.js";
 import { DEFAULTS } from "../public/rules.js";
 import { sha256, randomToken, findPlayer, opponentsOf, looksFor, setDress } from "./people.js";
 import { pushConfigured, sendPush } from "./push.js";
+import { isAdmin, overview, guestAction, gameAction } from "./admin.js";
 
 import { BUILD, NOTE as BUILD_NOTE } from "../public/build.js";
 
@@ -193,6 +194,16 @@ async function api(request, env, ctx, path, url) {
   const who = await me(request, env);
   if (!who) return err("Please log in", 401);
 
+  /* ---------- admin (Carl only, 14 Nov 2026) ---------- */
+  if (path.startsWith("/api/admin/")) {
+    if (!isAdmin(who)) return err("Not for you, sorry", 403);
+    try {
+      if (path === "/api/admin/overview" && m === "GET") return json(await overview(env));
+      if (path === "/api/admin/guest" && m === "POST") return json(await guestAction(env, (await body(request)) || {}));
+      if (path === "/api/admin/game" && m === "POST") return json(await gameAction(env, (await body(request)) || {}));
+    } catch (e) { if (e instanceof Refusal) throw e; return err(e.message); }
+    return err("No such admin action", 404);
+  }
   if (path === "/api/logout" && m === "POST") {
     await env.DB.prepare(`DELETE FROM gh_sessions WHERE token = ?`).bind(who.token).run();
     return json({ ok: true });
@@ -203,7 +214,7 @@ async function api(request, env, ctx, path, url) {
     const ids = [who.id, ...opponents.map((o) => o.id), ...games.flatMap((g) => g.players)];
     const lg = await league(env, who, opponents);
     const news = await goodNews(env, who).catch(() => []);
-    return json({ league: lg, news, me: { id: who.id, name: who.name, isAdmin: who.isAdmin, guest: who.guest, walkin: !!who.walkin, host: who.host, hostName: who.host ? await hostNameOf(env)(who.host) : null }, opponents, house: HOUSE, games, looks: await looksFor(env, ids), defaults: DEFAULTS, push: pushConfigured(env), build: BUILD, note: BUILD_NOTE });
+    return json({ league: lg, news, me: { id: who.id, name: who.name, isAdmin: who.isAdmin, admin: isAdmin(who), guest: who.guest, walkin: !!who.walkin, host: who.host, hostName: who.host ? await hostNameOf(env)(who.host) : null }, opponents, house: HOUSE, games, looks: await looksFor(env, ids), defaults: DEFAULTS, push: pushConfigured(env), build: BUILD, note: BUILD_NOTE });
   }
   if (path === "/api/games" && m === "GET") return json({ build: BUILD, games: await listGames(env, who) });
   if (path === "/api/games" && m === "POST") {

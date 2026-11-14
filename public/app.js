@@ -239,6 +239,7 @@ function route() {
   if ((m = h.match(/^#\/game\/([a-z0-9]{6})/))) return openGame(m[1]);
   if ((m = h.match(/^#\/replay\/([a-z0-9]{6})/))) return renderReplay(m[1]);
   if (h === "#/record") return renderRecord();
+  if (h === "#/admin") return renderAdmin();
   if (h === "#/league") return renderLeague();
   if (h === "#/logbook") return renderLogbook();
   S.G = null;
@@ -391,7 +392,7 @@ async function renderLobby() {
       ${wardrobeCard()}
       ${notifyCard()}
       <details class="howto"><summary>How to play</summary>${howTo(R)}</details>
-      <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a> · <button class="linkish" type="button" data-guff-feedback>Tell GuffBot</button> · <button class="linkish" id="logout">Go home</button><br><small class="soft">Version ${esc(BUILD)}</small></p>
+      <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a> · <button class="linkish" type="button" data-guff-feedback>Tell GuffBot</button> · <button class="linkish" id="logout">Go home</button>${S.me.admin ? ` · <a href="#/admin">Admin</a>` : ""}<br><small class="soft">Version ${esc(BUILD)}</small></p>
     </section>`;
   const app = $("app");
   app.querySelectorAll("[data-crew]").forEach((b) => (b.onclick = () => { const id = b.dataset.crew; NEW.crew = NEW.crew.includes(id) ? NEW.crew.filter((x) => x !== id) : [...NEW.crew, id]; renderLobby(); }));
@@ -2078,6 +2079,83 @@ async function shareHighlights(H, names) {
   const text = H.loser ? `📺 Guffhead highlights: watch ${S.me && H.loser === S.me.id ? "me" : names[H.loser] || "someone"} become the Guffhead 💩` : "📺 Guffhead highlights";
   try { if (navigator.share) { await navigator.share({ text, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
   try { await navigator.clipboard.writeText(`${text} ${url}`); toast("Copied. Paste it into the WhatsApp group."); } catch { toast(url, 6000); }
+}
+
+/* ---------- admin (Carl only, 14 Nov 2026) ----------
+   Who's playing and who isn't, what the nightly clear-out is about to let go, and rename / keep / delete.
+   Destructive buttons ask twice (tap, then "Sure?"), never a browser pop-up. */
+async function renderAdmin() {
+  const app = $("app");
+  app.innerHTML = `<p class="loading">Pam is fetching the books…</p>`;
+  let d;
+  try { d = await api("/admin/overview"); } catch (e) { app.innerHTML = `<section class="admin"><p class="err">${esc(e.message)}</p><p><a href="#/">Back to the tables</a></p></section>`; return; }
+  const A = S.admin = S.admin || { tab: "soon", q: "" };
+  const day = 86400000, now = d.now;
+  const when = (t) => { if (!t) return "never"; const n = Math.round((now - t) / day); return n <= 0 ? "today" : n === 1 ? "yesterday" : `${n} days ago`; };
+  const until = (t) => { if (!t) return ""; const n = Math.ceil((t - now) / day); return n <= 0 ? "tonight" : n === 1 ? "in 1 day" : `in ${n} days`; };
+  const soon = (t) => t && t - now < 7 * day;
+  const live = d.games.filter((g) => g.status === "playing");
+  const leaving = d.guests.filter((g) => soon(g.due)).length + d.games.filter((g) => soon(g.due)).length;
+  const match = (txt) => !A.q || txt.toLowerCase().includes(A.q.toLowerCase());
+  const guestCard = (g) => `<div class="arow${soon(g.due) ? " leaving" : ""}${g.keep ? " kept" : ""}">
+      <div class="amain"><b>${esc(g.name)}</b> <small class="atag">${g.kind}${g.by ? ` by ${esc(g.by)}` : ""}</small>${g.keep ? ` <small class="atag keep">kept</small>` : ""}
+        <small>Joined ${when(g.created)} · seen ${when(g.seen)} · ${g.games} game${g.games === 1 ? "" : "s"}${g.live ? ` (${g.live} live)` : ""}${g.invitesOut ? ` · ${g.invitesOut} invite${g.invitesOut === 1 ? "" : "s"} out` : ""}</small>
+        <small class="adue">${g.keep ? "Kept: never cleared" : g.due ? `Cleared ${until(g.due)} unless they play` : "Safe while they have a live game"}</small></div>
+      <div class="abtns"><button class="chip" data-g="rename" data-id="${g.id}" data-name="${esc(g.name)}">Rename</button><button class="chip" data-g="${g.keep ? "unkeep" : "keep"}" data-id="${g.id}">${g.keep ? "Unkeep" : "Keep"}</button><button class="chip danger" data-g="delete" data-id="${g.id}">Delete</button></div></div>`;
+  const gameCard = (g) => `<div class="arow${soon(g.due) ? " leaving" : ""}">
+      <div class="amain"><b>${g.players.map((p) => esc(p.name)).join(", ")}</b> <small class="atag ${g.status === "playing" ? "live" : ""}">${g.status === "playing" ? "live" : "finished"}</small>
+        <small>Started ${when(g.created)} · last move ${when(g.updated)}${g.loser ? ` · 💩 ${esc(g.loser)}` : ""}</small>
+        <small class="adue">${g.due ? `Cleared ${until(g.due)}${g.status === "playing" ? " unless someone moves" : ""}` : "Has a regular in it: never cleared"}</small></div>
+      <div class="abtns">${g.status === "playing" ? `<a class="chip" href="#/game/${g.id}">Look</a>` : `<a class="chip" href="#/highlights/${g.id}">📺</a>`}<button class="chip danger" data-gm="delete" data-id="${g.id}">Delete</button></div></div>`;
+  const regCard = (r) => `<div class="arow"><div class="amain"><b>${esc(r.name)}</b> <small class="atag">regular</small><small>${r.games} game${r.games === 1 ? "" : "s"}${r.live ? ` (${r.live} live)` : ""} · last played ${when(r.seen)}</small><small class="adue">Shared Guff login: change it in Words and Guff, not here</small></div></div>`;
+  let body = "";
+  if (A.tab === "soon") {
+    const gs = d.guests.filter((g) => soon(g.due)).sort((a, b) => a.due - b.due), gm = d.games.filter((g) => soon(g.due)).sort((a, b) => a.due - b.due);
+    body = gs.length || gm.length ? `${gs.length ? `<h3>Guests</h3>${gs.map(guestCard).join("")}` : ""}${gm.length ? `<h3>Games</h3>${gm.map(gameCard).join("")}` : ""}` : `<p class="soft">Nothing is due to be cleared in the next week.</p>`;
+  } else if (A.tab === "players") {
+    const gs = d.guests.filter((g) => match(g.name)), rs = d.regulars.filter((r) => match(r.name));
+    body = `<h3>Guests (${d.guests.length} of ${d.cap})</h3>${gs.map(guestCard).join("") || `<p class="soft">No guests yet.</p>`}<h3>Regulars</h3>${rs.map(regCard).join("") || `<p class="soft">None.</p>`}`;
+  } else {
+    const gm = d.games.filter((g) => match(g.players.map((p) => p.name).join(" ")));
+    body = gm.map(gameCard).join("") || `<p class="soft">No games.</p>`;
+  }
+  app.innerHTML = `<section class="admin">
+    <h2>Admin</h2>
+    <div class="atiles"><div><b>${d.seats}</b><small>of ${d.cap} guest seats</small></div><div><b>${live.length}</b><small>live games</small></div><div><b>${d.guests.filter((g) => now - g.seen < 7 * day).length}</b><small>guests this week</small></div><div class="${leaving ? "warn" : ""}"><b>${leaving}</b><small>leaving this week</small></div></div>
+    <nav class="tabs4 atabs">${[["soon", "Leaving soon"], ["players", "Players"], ["games", "Games"]].map(([k, l]) => `<button class="tabbtn${A.tab === k ? " on" : ""}" data-atab="${k}">${l}</button>`).join("")}</nav>
+    ${A.tab === "soon" ? "" : `<input class="asearch" id="aq" placeholder="Search by name" value="${esc(A.q)}">`}
+    <div class="alist">${body}</div>
+    <p class="small soft">Each night at 3am the clear-out lets go of guests not seen for 30 days (unless kept or in a live game), guest-only games 14 days after the last move, and finished guest-only games after 90 days. Your regulars and their games are never touched.</p>
+    <p class="foot"><a href="#/">Back to the tables</a></p>
+  </section>`;
+  app.querySelectorAll("[data-atab]").forEach((b) => (b.onclick = () => { A.tab = b.dataset.atab; renderAdmin(); }));
+  const q = $("aq"); if (q) q.oninput = () => { A.q = q.value; clearTimeout(A.t); A.t = setTimeout(() => { renderAdmin().then(() => { const x = $("aq"); if (x) { x.focus(); x.setSelectionRange(x.value.length, x.value.length); } }); }, 250); };
+  const sure = (b) => { if (b.dataset.sure) return true; b.dataset.sure = 1; b.textContent = "Sure?"; b.classList.add("armed"); setTimeout(() => { if (b.isConnected) { delete b.dataset.sure; b.textContent = "Delete"; b.classList.remove("armed"); } }, 4000); return false; };
+  app.querySelectorAll("[data-g]").forEach((b) => (b.onclick = async () => {
+    const action = b.dataset.g, id = b.dataset.id;
+    let name;
+    if (action === "rename") { name = await askName(b.dataset.name); if (!name) return; }
+    if (action === "delete" && !sure(b)) return;
+    try { const r = await api("/admin/guest", { method: "POST", body: { id, action, name } }); toast(action === "delete" ? `Deleted${r.games ? `, with ${r.games} game${r.games === 1 ? "" : "s"} only they were in` : ""}.` : action === "rename" ? `Renamed to ${r.name}.` : action === "keep" ? "Kept: the clear-out will leave them alone." : "Back to normal: cleared after 30 quiet days."); renderAdmin(); }
+    catch (e) { toast(e.message); }
+  }));
+  app.querySelectorAll("[data-gm]").forEach((b) => (b.onclick = async () => {
+    if (!sure(b)) return;
+    try { await api("/admin/game", { method: "POST", body: { id: b.dataset.id, action: "delete" } }); toast("Game deleted."); renderAdmin(); } catch (e) { toast(e.message); }
+  }));
+}
+/** A little in-page box for a new name (no browser pop-ups). */
+function askName(current) {
+  return new Promise((res) => {
+    const box = document.createElement("div");
+    box.className = "howsheet";
+    box.innerHTML = `<form class="howcard"><h3>Rename ${esc(current)}</h3><p>First name only. It changes in their games too.</p><input id="newName" maxlength="20" value="${esc(current)}" style="width:100%;font:700 1.1rem var(--body);padding:10px;border-radius:10px;border:1px solid #DADFE7;margin-bottom:12px"><div class="howbtns"><button type="button" class="linkish" data-x>Cancel</button><button class="btn gold">Rename</button></div></form>`;
+    document.body.appendChild(box);
+    const done = (v) => { box.remove(); res(v); };
+    box.querySelector("[data-x]").onclick = () => done(null);
+    box.querySelector("form").onsubmit = (e) => { e.preventDefault(); done($("newName").value.trim()); };
+    $("newName").focus(); $("newName").select();
+  });
 }
 
 /* ---------- the Logbook: finished games between you and your friends (CountGuff's Logbook) ---------- */
