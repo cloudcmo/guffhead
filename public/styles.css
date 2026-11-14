@@ -850,3 +850,22 @@ body.fit .sign { padding-top: 3px; padding-bottom: 3px; }
 .locktag.go { background: var(--gold); color: var(--ink); border-color: var(--gold); }
 /* the next-table nudge sits at the top on a live game, never over Play or Pick up */
 body.fit .nexttoast { top: calc(6px + env(safe-area-inset-top)); bottom: auto; }
+/* the catch-up as a readable list along the bottom of the table: light, big enough to read, newest at the bottom */
+.table .stage.strip { background: rgba(255, 255, 255, .97); color: #1A1C22; border: 1px solid #DADFE7; box-shadow: 0 6px 18px rgba(16, 24, 40, .18); max-height: 122px; justify-content: flex-end; padding: 6px 10px 8px; }
+.table .stage.strip .stagehead { color: #5B6472; font: 800 .8rem var(--body); font-style: normal; }
+.table .stage.strip .stagehead .linkish { color: #4F46E5; }
+.game.staging .table { padding-bottom: 128px; }
+.cline { display: flex; align-items: center; gap: 8px; margin: 2px 0; font: 700 .92rem/1.25 var(--body); color: #3A404B; opacity: .6; }
+.cline .avatar { flex: none; border-radius: 50%; background: #EEF0F4; }
+.cline i { font-style: italic; color: #6B4FD8; font-weight: 700; }
+.cline.now { opacity: 1; color: #111318; font-size: 1rem; animation: slide .3s ease-out; }
+.cline.now.big { font-weight: 900; }
+/* the danger meter: the 💩 hovering over whoever has the most cards left */
+.danger { display: inline-flex; align-items: center; gap: 3px; font: 800 .78rem var(--body); color: #B5462F; white-space: nowrap; }
+.danger i { font-style: normal; display: inline-block; animation: hover 1.4s ease-in-out infinite; }
+@keyframes hover { 0%, 100% { transform: translateY(0) rotate(-8deg); } 50% { transform: translateY(-4px) rotate(8deg); } }
+@media (prefers-reduced-motion: reduce) { .danger i { animation: none; } }
+html[data-theme="pub"] .danger, html[data-theme="britpop"] .danger { color: #FFB199; }
+.myhead b { white-space: nowrap; }
+.danger.me { font-size: .7rem; vertical-align: 1px; }
+.game.staging .table .need { visibility: hidden; }

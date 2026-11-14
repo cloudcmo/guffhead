@@ -773,7 +773,7 @@ async function catchUp(evs, away, track = null) {
   const shown = new Set(evs.map((e) => e.seq));
   const queue = track ? track.all : evs;
   stage.hidden = false;
-  stage.innerHTML = `<div class="stagehead">${away ? "While you were away" : ""}<span class="stagecount" id="stagecount"></span><button class="linkish" id="skip">Skip ▸▸</button></div><div class="stagebody" id="stagebody"></div>`;
+  stage.innerHTML = `<div class="stagehead">${away ? "While you were away" : track ? "Just now" : ""}<span class="stagecount" id="stagecount"></span><button class="linkish" id="skip">Skip ▸▸</button></div><div class="stagebody" id="stagebody"></div>`;
   $("skip").onclick = (e) => { e.stopPropagation(); S.skip = true; if (S.wake) S.wake(); };
   stage.onclick = () => { if (S.wake) S.wake(); };
   // bad news first, landed with a bit of humour (Words and Guff's "they bingo'd against me")
@@ -796,8 +796,16 @@ async function catchUp(evs, away, track = null) {
     i++;
     const c = $("stagecount"); if (c && evs.length > 1) c.textContent = `${i} of ${evs.length}`;
     const big = weight(e) === "big";
-    body.innerHTML = stageCard(e, names);
-    body.firstElementChild.classList.add(big ? "pop" : "slide");
+    if (S.stagePile) {
+      // a running list, newest at the bottom, like a WhatsApp (casual player review, 14 Nov 2026: "I can't read who
+      // played what"); the cards themselves land on the real pile above
+      body.querySelectorAll(".cline.now").forEach((x) => x.classList.remove("now"));
+      body.insertAdjacentHTML("beforeend", catchLine(e, names));
+      while (body.children.length > 3) body.firstElementChild.remove();
+    } else {
+      body.innerHTML = stageCard(e, names);
+      body.firstElementChild.classList.add(big ? "pop" : "slide");
+    }
     showPile();
     if (e.k === "play" && e.burn) { whoosh(); buzz([40, 30, 40]); body.querySelector(".stagecards") && body.querySelector(".stagecards").classList.add("burning"); }
     else if (e.k === "play" || e.k === "flip") snap(e.cards ? e.cards.length : 1);
@@ -809,6 +817,13 @@ async function catchUp(evs, away, track = null) {
   S.stagePile = false;
   S.playing = false; S.wake = null;
   if (S.G) renderGame();
+}
+/** One line of the catch-up list: whose face, what they did, GuffBot's word on it if he's on. */
+function catchLine(e, names) {
+  const who = e.k === "over" ? e.loser : e.p;
+  const talk = S.talk ? comment(e, Object.fromEntries(S.G.players.map((p) => [p, nameOf(p)])), S.me.id) : null;
+  const tag = e.autopilot ? " (GuffBot played it)" : e.auto ? " (no choice)" : "";
+  return `<p class="cline now${weight(e) === "big" ? " big" : ""}">${who ? headOf(who, 26) : ""}<span>${esc((describe(e, names, S.me.id) || "") + tag)}${talk ? ` <i>${esc(talk)}</i>` : ""}</span></p>`;
 }
 /** A pause the player can cut short by tapping the stage. */
 function wait(ms) { return new Promise((r) => { const t = setTimeout(done, ms); function done() { clearTimeout(t); S.wake = null; r(); } S.wake = done; }); }
@@ -872,6 +887,7 @@ function renderGame(staging = false) {
         ${chatty ? tabBtn("chat", `💬 Chat${unread() ? ` <span class="count">${unread()}</span>` : ""}`) : ""}
         ${tabBtn("log", "📜 Log")}${tabBtn("rules", "📏 Rules")}${tabBtn("table", "🪑 Table")}
       </nav>`;
+  S.danger = dangerOf(G);
   app.innerHTML = `
     <section class="game${staging ? " staging" : ""}${fit ? " fit" : ""}">
       ${fit ? "" : `<div class="status">${statusLine(G)}</div>`}
@@ -996,13 +1012,24 @@ function oppPod(G, p, turnId, nextId) {
   const known = (p.known || []).slice();
   const out = p.out ? `<span class="outbadge">${p.out === 1 ? "Out first" : "Out"}</span>` : "";
   return `<div class="pod${turn ? " turn" : ""}${p.out ? " isout" : ""}${G.loser === p.id ? " guffhead" : ""}" data-pid="${p.id}">
-    <div class="podhead"><span class="podav">${headOf(p.id, 34, wears(G, p.id), S.drop && wears(G, p.id))}<b class="handbadge${hand ? "" : " none"}" title="${hand} in hand">${hand}</b></span><span class="podname">${esc(nameOf(p.id))}${here ? `<i class="dot" title="At the table now"></i>` : ""}${status}</span>${out}</div>
+    <div class="podhead"><span class="podav">${headOf(p.id, 34, wears(G, p.id), S.drop && wears(G, p.id))}<b class="handbadge${hand ? "" : " none"}" title="${hand} in hand">${hand}</b></span><span class="podname">${esc(nameOf(p.id))}${here ? `<i class="dot" title="At the table now"></i>` : ""}${status}${dangerTag(p.id)}</span>${out}</div>
     <div class="podcards">
       <span class="tablecards">${tableStack(p, "op", G.settings)}</span>
     </div>
     ${known.length ? `<div class="known" title="Cards everyone saw them pick up"><span class="kl">Picked up</span>${sortCards(known, G.settings).slice(-5).reverse().map((c) => `<span class="kc${c[1] === "H" || c[1] === "D" ? " red" : ""}">${RANK[c[0]] || c[0]}${SUIT[c[1]]}</span>`).join("")}${known.length > 5 ? `<span class="kmore">+${known.length - 5}</span>` : ""}</div>` : ""}
   </div>`;
 }
+/** The Guffhead danger meter (casual player review, 14 Nov 2026): a wobbling 💩 over whoever has the most cards left,
+ *  so you can see who's winning without counting. Nobody when it's a tie, or before anyone's had a go. */
+function dangerOf(G) {
+  const g = G.g;
+  if (G.status !== "playing" || g.phase !== "play" || g.turns < 2) return null;
+  const left = (p) => (Array.isArray(p.hand) ? p.hand.length : p.hand) + p.up.length + (typeof p.down === "number" ? p.down : 0);
+  const live = g.seats.filter((p) => !p.out).map((p) => ({ id: p.id, n: left(p) })).sort((a, b) => b.n - a.n);
+  if (live.length < 2 || live[0].n === live[1].n) return null;
+  return live[0].id;
+}
+const dangerTag = (pid) => (S.danger === pid ? `<small class="danger" title="Most cards left: heading for the 💩"><i>💩</i> in danger</small>` : "");
 /** Face-down cards with the face-up ones sitting on them. */
 function tableStack(p, size, s, o = {}) {
   const downs = typeof p.down === "number" ? p.down : 0;
@@ -1030,7 +1057,7 @@ function myArea(G, me, turnId) {
   const ap = G.auto && G.auto[me.id];
   const canAuto = G.status === "playing" && G.g.phase === "play" && !me.out && !G.watching;
   return `<div class="mine${myGo ? " turn" : ""}${waiting ? " waiting" : ""}${me.out ? " isout" : ""}">
-    <div class="myhead">${headOf(me.id, 34, wears(G, me.id), S.drop && wears(G, me.id))}<b>You</b>${me.out ? `<span class="outbadge">${me.out === 1 ? "Out first" : "Out"}</span>` : ""}${wears(G, me.id) && G.status === "playing" ? `<small class="soft">💩 from last time</small>` : ""}${canAuto ? `<button class="chip autobtn${ap ? " on" : ""}" id="autoBtn" aria-expanded="${!!S.autoMenu}">🤖 ${ap ? "On" : "Auto"}</button>` : ""}</div>
+    <div class="myhead">${headOf(me.id, 34, wears(G, me.id), S.drop && wears(G, me.id))}<b>You${S.danger === me.id ? ` <small class="danger me" title="You've got the most cards left: heading for the 💩"><i>💩</i> danger</small>` : ""}</b>${me.out ? `<span class="outbadge">${me.out === 1 ? "Out first" : "Out"}</span>` : ""}${wears(G, me.id) && G.status === "playing" ? `<small class="soft">💩 from last time</small>` : ""}${canAuto ? `<button class="chip autobtn${ap ? " on" : ""}" id="autoBtn" aria-expanded="${!!S.autoMenu}">🤖 ${ap ? "On" : "Auto"}</button>` : ""}</div>
     ${canAuto && S.autoMenu && !ap ? autoMenu() : ""}
     ${canAuto && ap ? `<p class="autoline">🤖 ${ap.left == null ? "GuffBot's playing for you until you're back." : ap.left === 1 ? "GuffBot's got your next go." : `GuffBot's got your next ${ap.left} goes.`} <button class="linkish" data-auto="off">Stop</button></p>` : ""}
     <div class="mytable${zone === "hand" ? " locked" : ""}">${tableStack(me, "sm", s, { tapUp: myGo && zone === "up", tapDown: myGo && zone === "down", dimUp: zone === "hand" })}${zone === "hand" && (me.up.length || me.down) ? `<span class="locktag">🔒 after your hand</span>` : zone === "up" && myGo ? `<span class="locktag go">▾ play these now</span>` : ""}</div>
