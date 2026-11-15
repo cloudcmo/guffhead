@@ -989,3 +989,14 @@ html[data-theme="pub"] .gamebar .invbar, html[data-theme="britpop"] .gamebar .in
 .segs { display: flex; gap: 4px; padding: 4px; margin: 6px 0 10px; border-radius: 999px; background: rgb(var(--panel-rgb) / .82); }
 .segs .seg { flex: 1; text-align: center; padding: 8px 4px; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: .9rem; color: var(--soft); }
 .segs .seg.on { background: var(--gold); color: #fff; }
+
+/* a slimmer "Your go" bar and one clear pick-up button (15 Nov 2026) */
+.game.fit .turnbar.yours { padding-top: 7px; padding-bottom: 7px; }
+.game.fit .turnbar.yours .tb-main { font-size: 1.2rem; }
+.game.fit .turnbar.yours .tb-do { font-size: .92rem; }
+.game.fit .turnbar .tb-last { -webkit-line-clamp: 1; }
+.btn.pickonly { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.btn.pickonly small { font-weight: 700; font-size: .8rem; opacity: .8; }
+.game.fit.tight .known, .game.fit.tight .turnbar .tb-last { display: none; }
+.game.fit.tighter .opps .card { --w: 34px; }
+.game.fit.tighter .table { min-height: 96px; }

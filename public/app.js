@@ -1065,6 +1065,7 @@ function renderGame(staging = false) {
   renderChat();
   fitHand();
   if (!staging) { bringMyGoIntoView(G); startIdle(G); }
+  squeeze();
   // (the "Ooh, a pair of 10s!" bubbles when play starts are gone: they read as comments on a play that hadn't
   // happened. Casual player review, 14 Nov 2026. The deal keeps its ooh and lol.)
 }
@@ -1112,6 +1113,15 @@ function fitHand() {
 }
 window.addEventListener("resize", () => fitHand());
 /** When it becomes your go, scroll so your cards and the Play button are on screen (once per go, never mid-chat). */
+/** If a busy table still won't fit the phone, drop the extras so the buttons never fall off the bottom. */
+function squeeze() {
+  const gm = document.querySelector(".game.fit");
+  if (!gm) return;
+  gm.classList.remove("tight", "tighter");
+  const over = () => gm.scrollHeight > gm.clientHeight + 2;
+  if (over()) gm.classList.add("tight");
+  if (over()) gm.classList.add("tighter");
+}
 function bringMyGoIntoView(G) {
   if (!G.myGo || G.status !== "playing") return;
   const key = `${G.id}:${G.g.seq}`;
@@ -1258,7 +1268,7 @@ function whatToDo(G) {
   if (o.zone === "down") return "Hand and face-up cards gone: flip one of your face-down cards. Pot luck!";
   const n = G.g.pile.length;
   const nxt = nameOf(nextAfter(G.g, G.g.turn) || "");
-  if (!o.plays.length) return `Nothing you've got will go. Pick up the pile (${n} card${n === 1 ? "" : "s"}), then it's ${nxt}'s go.`;
+  if (!o.plays.length) return "Nothing you've got will go, so pick up the pile.";
   const w = needWords(G.g.pile, s);
   const an = (x) => (/^(8|ace|Ace)/.test(x) ? "an" : "a");
   let need = /anything/i.test(w) ? "Play any card" : /^Aces only/.test(w) ? "Play an ace" : `Play ${an(w)} ${w.replace(/^(Jack|Queen|King|Ace)/, (m) => m.toLowerCase())}`;
@@ -1274,6 +1284,8 @@ function actionsHtml(G) {
   if (!o) return "";
   if (o.zone === "down") return `<p class="prompt">Tap one of your face-down cards to flip it.</p>`;
   const sel = S.sel;
+  // nothing will go: one big button, the one you need, not a greyed-out one above it (Carl, 15 Nov 2026)
+  if (!o.plays.length && o.pickUp) return `<button class="btn gold big pickonly" id="pickBtn">Pick up the pile (${G.g.pile.length})<small>then it's ${esc(nameOf(nextAfter(G.g, G.g.turn) || ""))}'s go</small></button>`;
   const label = S.warn ? S.warn : sel.length ? `Play ${sel.length === 1 ? `the ${cardName(sel[0])}` : `${["", "", "two", "three", "four"][sel.length] || sel.length} ${pluralOf(sel[0])}`}` : o.plays.length ? "Pick a card (double-tap to play)" : "Nothing will go";
   return `<button class="btn gold big${S.warn ? " armed" : ""}" id="playBtn"${sel.length ? "" : " disabled"}>${esc(label)}</button>${o.pickUp ? `<button class="btn ghost pickbtn" id="pickBtn">Pick up ${G.g.pile.length}<small>then it's ${esc(nameOf(nextAfter(G.g, G.g.turn) || ""))}'s go</small></button>` : ""}`;
 }
