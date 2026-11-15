@@ -218,3 +218,48 @@ export const aCard = (c) => `${c[0] === "A" || c[0] === "8" ? "an" : "a"} ${NAME
 const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
 export const pluralOf = (c) => PLURAL[c[0]];
 const numWord = (n) => ["", "one", "two", "three", "four", "five", "six", "seven", "eight"][n] || String(n);
+
+/** Who's wearing the 💩, said a different way each day (Carl, 15 Nov 2026: "comical in imagery, not too coarse").
+ *  Short enough for one line on a phone. {n} is the wearer. */
+export const WEARING = [
+  "{n} is wearing the 💩",
+  "{n} has a new brown hat",
+  "{n} is modelling this season's 💩",
+  "{n} has a little friend on their head",
+  "{n} is top of the heap, sadly",
+  "{n} is balancing a 💩 like a pro",
+  "{n} is in the 💩 hat of shame",
+  "{n} got the brown beret",
+  "{n} is keeping the 💩 warm",
+  "{n} has been fitted for a 💩",
+  "{n} is under a small brown cloud",
+  "{n} is holding the 💩 for now",
+  "{n} is the proud owner of a 💩",
+  "{n} is up to their ears in it",
+  "{n} has had a bird-related incident",
+  "{n} is wearing it with dignity",
+  "{n} is wearing it. Badly",
+  "{n} is the current custodian of the 💩",
+  "{n} has a fresh swirl on top",
+  "{n} is smelling faintly of defeat",
+];
+export const WEARING_YOU = [
+  "You're wearing the 💩",
+  "You've got a new brown hat",
+  "You're modelling this season's 💩",
+  "There's a little friend on your head",
+  "You're top of the heap, sadly",
+  "You're in the 💩 hat of shame",
+  "You got the brown beret",
+  "You're keeping the 💩 warm",
+  "You're under a small brown cloud",
+  "You're wearing it with dignity",
+  "You're the current custodian of the 💩",
+  "You've got a fresh swirl on top",
+  "Something's balanced on your head",
+  "You're smelling faintly of defeat",
+];
+export function wearingLine(name, you, seed) {
+  const pool = you ? WEARING_YOU : WEARING;
+  return pool[Math.abs(seed) % pool.length].replace("{n}", name);
+}

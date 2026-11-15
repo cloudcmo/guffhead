@@ -1,6 +1,6 @@
 // Guffhead: the page. The back room of a 1970s pub. Routes: #/  #/game/:id  #/replay/:id  #/league  #/logbook  #/record
 import { needWords, rankOf, isMagic, describeRules, DEFAULTS, IDLE_CHOICES, MAX_PLAYERS, sortCards } from "./rules.js";
-import { comment, describe, weight, room, say, cardName, pluralOf, aCard, helloLine } from "./lines.js";
+import { comment, describe, weight, room, say, cardName, pluralOf, aCard, helloLine, wearingLine } from "./lines.js";
 import { pick as pickPaper } from "./wallpaper.js";
 import { svg as boardSvg, png as boardPng } from "./poster.js";
 import { at as replayAt, steps as replaySteps, canReplay } from "./replay.js";
@@ -2259,8 +2259,9 @@ function leagueSnippet(lg) {
   // one slim line (Carl, 15 Nov 2026: the big card took a lot of room at the top). There's only ever one wearer:
   // whoever lost the latest game with friends; the full table is a tap away.
   if (!lg || !lg.table || !lg.table.length) return "";
-  const who = lg.current ? (lg.current === S.me.id ? "You're" : `${esc(nameOf(lg.current))} is`) : null;
-  return `<a class="leaguesnip slim" href="#/league">${lg.current ? `${headOf(lg.current, 30, true)}<span class="lsw"><b>${who} wearing the 💩</b></span>` : `<span class="lsw"><b>Nobody's wearing the 💩 yet</b></span>`}<em>League ▸</em></a>`;
+  // a new way of saying it each time you come back, like the greeting (Carl, 15 Nov 2026)
+  const who = lg.current ? esc(wearingLine(nameOf(lg.current), lg.current === S.me.id, seedOf((S.hello || tonight()) + lg.current))) : null;
+  return `<a class="leaguesnip slim" href="#/league">${lg.current ? `${headOf(lg.current, 30, true)}<span class="lsw"><b>${who}</b></span>` : `<span class="lsw"><b>Nobody's wearing the 💩 yet</b></span>`}<em>League ▸</em></a>`;
 }
 async function renderLeague() {
   $("app").innerHTML = `<p class="loading">Pam is counting the 💩…</p>`;
