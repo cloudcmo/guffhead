@@ -957,7 +957,14 @@ async function catchUp(evs, away, track = null) {
     else if (e.k === "play" || e.k === "flip") snap(e.cards ? e.cards.length : 1);
     if (e.k === "over") buzz([80, 40, 120]);
     if (after === "burn") { showPile("burning"); await wait(per * 0.9); pile = []; showPile(); await wait(per * 0.8); continue; }
-    if (after === "pickup") { showPile("scooped"); await wait(per * 0.7); pile = []; showPile(); await wait(per * 0.8); continue; }
+    if (after === "pickup") {
+      const to = document.querySelector(`.pod[data-pid="${e.p}"]`) || (e.p === S.me.id ? document.querySelector(".mine .hand") || document.querySelector(".mine") : null);
+      const went = pile.slice();
+      await wait(per * 0.3);
+      pile = []; showPile();
+      await slideAway(to, went);
+      await wait(per * 0.5); continue;
+    }
     await wait(big ? per * 1.5 : per);
   }
   S.stagePile = false;
@@ -1181,6 +1188,35 @@ function slideIn(fromEl, cards, pileLen) {
     { transform: `translate(${x1}px, ${y1}px) rotate(${end}deg) scale(${s1})` },
   ], { duration: 480 + (seed % 220), easing: "cubic-bezier(.15, .75, .3, 1)", fill: "forwards" });
   return anim.finished.then(() => f.remove(), () => f.remove());
+}
+/** A pick-up: the pile sweeps off the table to whoever's taking it, the cards spreading as they go (Carl, 15 Nov
+ *  2026: "slide from the centre of the table to where the player is... more realistic and obvious"). */
+function slideAway(toEl, cards) {
+  const from = document.querySelector("#pile .fan") || $("pile");
+  if (!toEl || !from || !cards || !cards.length || reduced()) return Promise.resolve();
+  const a = from.getBoundingClientRect(), b = toEl.getBoundingClientRect();
+  if (!a.width || !b.width) return Promise.resolve();
+  const top = cards.slice(-6);
+  const pw = parseFloat(getComputedStyle($("pile") || from).getPropertyValue("--pw")) || 60;
+  const runs = top.map((c, i) => {
+    const f = document.createElement("div");
+    f.className = "slidecard";
+    f.innerHTML = card(c, { size: "md", s: S.G.settings });
+    document.body.appendChild(f);
+    const w = f.getBoundingClientRect();
+    const sc = pw / (w.width || pw);
+    const seed = seedOf(c + i + S.G.id);
+    const r0 = (seedOf(c + i) % 21) - 10;
+    const x0 = a.left + a.width / 2 - w.width / 2 + i * 3, y0 = a.top + a.height / 2 - w.height / 2;
+    const x1 = b.left + b.width / 2 - w.width / 2 + (i - (top.length - 1) / 2) * 14, y1 = b.top + b.height / 2 - w.height / 2;
+    const anim = f.animate([
+      { transform: `translate(${x0}px, ${y0}px) rotate(${r0}deg) scale(${sc})`, opacity: 1 },
+      { transform: `translate(${(x0 + x1) / 2 + (i - top.length / 2) * 10}px, ${(y0 + y1) / 2}px) rotate(${r0 + (seed % 2 ? 1 : -1) * (40 + (seed % 90))}deg) scale(${sc * 0.85})`, opacity: 1, offset: 0.5 },
+      { transform: `translate(${x1}px, ${y1}px) rotate(${(i - (top.length - 1) / 2) * 8}deg) scale(.45)`, opacity: 0.2 },
+    ], { duration: 700, delay: i * 70, easing: "cubic-bezier(.3, .1, .3, 1)", fill: "forwards" });
+    return anim.finished.then(() => f.remove(), () => f.remove());
+  });
+  return Promise.all(runs);
 }
 function pileHtml(g, s) {
   if (!g.pile.length) return `<span class="mat"></span><span class="fan"></span>`;
@@ -1631,7 +1667,14 @@ function wireGame() {
   if ($("inviteEnd")) $("inviteEnd").onclick = () => inviteSheet();
   if ($("shareMoment")) $("shareMoment").onclick = () => shareMoment(G, $("shareMoment").dataset.what);
   wireCracker(G);
-  if ($("pickBtn")) $("pickBtn").onclick = () => doAct({ act: "pickup" });
+  if ($("pickBtn")) $("pickBtn").onclick = () => {
+    if (S.busy) return;
+    const went = G.g.pile.slice();
+    const fan = document.querySelector("#pile .fan");
+    const sweep = slideAway(document.querySelector(".mine .hand") || document.querySelector(".mine"), went);
+    if (fan) fan.style.visibility = "hidden";
+    sweep.then(() => doAct({ act: "pickup" }));
+  };
   if ($("again")) $("again").onclick = async () => { try { const r = await api(`/games/${G.id}/again`, { method: "POST" }); shuffleSound(); location.hash = `#/game/${r.id}`; } catch (e) { toast(e.message); } };
   if ($("resign")) $("resign").onclick = () => { if (confirmTwice("resign")) doAct({ act: "resign" }); };
   app.querySelectorAll("[data-toggle]").forEach((b) => (b.onclick = () => {
