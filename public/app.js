@@ -240,6 +240,7 @@ function route() {
   if (!S.token) return renderLogin();
   if ((m = h.match(/^#\/game\/([a-z0-9]{6})/))) return openGame(m[1]);
   if ((m = h.match(/^#\/replay\/([a-z0-9]{6})/))) return renderReplay(m[1]);
+  if (h === "#/stats") { location.replace(`#/${S.me && S.me.guest ? "record" : store.get("gh:stats") || "league"}`); return; }
   if (h === "#/record") return renderRecord();
   if (h === "#/admin") return renderAdmin();
   if (h === "#/league") return renderLeague();
@@ -257,8 +258,10 @@ function nav(h) {
   if (bn) {
     bn.hidden = !S.token || inGame;
     document.body.classList.toggle("tabs", !bn.hidden);
-    const which = h === "#/" || h === "" || h === "#" ? "tables" : h.replace("#/", "");
-    bn.querySelectorAll("a").forEach((a) => { a.classList.toggle("on", a.dataset.tab === which); if (a.dataset.tab === "league" || a.dataset.tab === "logbook") a.hidden = !!(S.me && S.me.guest); });
+    // three tabs (Carl, 15 Nov 2026): Play (your games), the big + (invite or deal), Stats (recent, league, your numbers)
+    const raw = h === "#/" || h === "" || h === "#" ? "tables" : h.replace("#/", "");
+    const which = ["league", "logbook", "record", "stats"].includes(raw) ? "stats" : raw;
+    bn.querySelectorAll("a").forEach((a) => a.classList.toggle("on", a.dataset.tab === which));
   }
   if (back) back.hidden = !S.token || !inGame;
   badge(waitingOnMe(S.games));
@@ -337,25 +340,15 @@ async function renderLobby() {
   S.lobbyLoaded = true;
   S.me = r.me; S.opponents = r.opponents; S.house = r.house; S.games = r.games; S.push = r.push;
   badge(waitingOnMe(r.games));
-  if ((location.hash || "#/") !== "#/" && location.hash !== "#" && location.hash !== "") return;
+  const hh = location.hash || "#/";
+  if (hh !== "#/" && hh !== "#" && hh !== "#/new") return;
+  const view = hh === "#/new" ? "new" : "play";
   const playing = r.games.filter((g) => g.status === "playing").sort((a, b) => (b.myGo - a.myGo) || (b.updated - a.updated));
   const done = r.games.filter((g) => g.status !== "playing").slice(0, 6);
   const n = NEW.crew.length;
   const R = NEW.rules;
-  $("app").innerHTML = `
-    <section class="lobby">
-      <div class="welcome">
-        <div class="landlord">${headOf("guffbot", 74)}</div>
-        <p class="patter">"${esc(S.hello || (S.hello = helloLine(S.me.name, S.me.guest && !r.games.length)))}"</p>
-      </div>
-      ${S.me.walkin ? `<p class="card-panel guestnote">Welcome, ${esc(S.me.name)}. Deal a game against GuffBot and Ms GuffBot below, or invite a friend: if they like S***head, they'll like this. This phone remembers you.</p>` : S.me.guest ? `<p class="card-panel guestnote">You're ${esc(S.me.hostName || "a friend")}'s guest. Deal them another game below, or invite someone of your own. This phone remembers you.</p>` : ""}
-      ${/* the "7 burns this month" news line is gone (Carl, 15 Nov 2026: too busy, and it didn't mean much) */ ""}
-      ${S.me.guest ? "" : leagueSnippet(r.league)}
-      <h2>Your games</h2>
-      <div class="tables">${playing.length ? playing.map(tableRow).join("") : `<p class="soft">No games on. Deal one below.</p>`}</div>
-      ${done.length && Date.now() - (done[0].finished || done[0].updated) < 2 * 86400000 ? `<a class="card-panel hlpromo" href="#/highlights/${done[0].id}"><span class="hllogo"><b>GUFF</b><span>OF THE DAY</span></span><span>📺 ${esc(done[0].loser === S.me.id ? "Relive how you became the Guffhead" : `Watch ${done[0].names[done[0].loser] || "someone"} become the Guffhead`)} ▸</span></a>` : ""}
-      ${done.length ? `<details class="done"><summary>Lately finished</summary>${done.map(tableRow).join("")}</details>` : ""}
-
+  $("app").innerHTML = view === "new" ? `
+    <section class="lobby newgame">
       <h2>Deal a game</h2>
       <div class="card-panel seat">
         <p class="small">Pick one to three to play with. GuffBot and Ms GuffBot play the moment it's their go.</p>
@@ -390,6 +383,26 @@ async function renderLobby() {
         <button class="btn gold" id="invite">📨 Make an invite link</button>
         <div id="inviteOut"></div>
       </div>`}
+
+      <h2>Tell people</h2>
+      <div class="card-panel">
+        <p class="small">Know someone who likes S***head? Send them Guffhead. They can play GuffBot and Ms GuffBot straight away with just a first name, then take on their friends.</p>
+        <button class="btn" id="shareGh">📣 Share Guffhead</button>
+      </div>
+      <p class="foot"><a href="https://hub.carlosfandango.net/">All the Guff games</a> · <button class="linkish" type="button" data-guff-feedback>Tell GuffBot</button> · <button class="linkish" id="logout">Go home</button>${S.me.admin ? ` · <a href="#/admin">Admin</a>` : ""}<br><small class="soft">Version ${esc(BUILD)}</small></p>
+    </section>` : `
+    <section class="lobby">
+      <div class="welcome">
+        <div class="landlord">${headOf("guffbot", 74)}</div>
+        <p class="patter">"${esc(S.hello || (S.hello = helloLine(S.me.name, S.me.guest && !r.games.length)))}"</p>
+      </div>
+      ${S.me.walkin ? `<p class="card-panel guestnote">Welcome, ${esc(S.me.name)}. Tap the big + to deal a game against GuffBot and Ms GuffBot, or to invite a friend: if they like S***head, they'll like this. This phone remembers you.</p>` : S.me.guest ? `<p class="card-panel guestnote">You're ${esc(S.me.hostName || "a friend")}'s guest. Tap the big + to deal them another game, or to invite someone of your own. This phone remembers you.</p>` : ""}
+      ${/* the "7 burns this month" news line is gone (Carl, 15 Nov 2026: too busy, and it didn't mean much) */ ""}
+      ${S.me.guest ? "" : leagueSnippet(r.league)}
+      <h2>Your games</h2>
+      <div class="tables">${playing.length ? playing.map(tableRow).join("") : `<p class="soft">No games on. <a href="#/new">Tap + to deal one</a>.</p>`}</div>
+      ${done.length && Date.now() - (done[0].finished || done[0].updated) < 2 * 86400000 ? `<a class="card-panel hlpromo" href="#/highlights/${done[0].id}"><span class="hllogo"><b>GUFF</b><span>OF THE DAY</span></span><span>📺 ${esc(done[0].loser === S.me.id ? "Relive how you became the Guffhead" : `Watch ${done[0].names[done[0].loser] || "someone"} become the Guffhead`)} ▸</span></a>` : ""}
+
       ${looksCard()}
       ${wardrobeCard()}
       ${notifyCard()}
@@ -406,8 +419,13 @@ async function renderLobby() {
   }));
   const rd = app.querySelector("details.rules");
   if (rd) rd.ontoggle = () => store.set("gh:rulesOpen", rd.open);
-  $("rulesReset").onclick = () => { NEW.rules = { ...DEFAULTS }; store.set("gh:rules", NEW.rules); renderLobby(); };
-  $("deal").onclick = () => start({ players: NEW.crew, settings: NEW.rules });
+  if ($("shareGh")) $("shareGh").onclick = async () => {
+    const d = { title: "Guffhead", text: "S***head on your phone, against your friends. Free, no app to install.", url: "https://guffhead.carlosfandango.net/" };
+    try { if (navigator.share) { await navigator.share(d); return; } } catch { return; }
+    try { await navigator.clipboard.writeText(d.url); toast("Link copied. Paste it anywhere."); } catch { toast(d.url, 6000); }
+  };
+  if ($("rulesReset")) $("rulesReset").onclick = () => { NEW.rules = { ...DEFAULTS }; store.set("gh:rules", NEW.rules); renderLobby(); };
+  if ($("deal")) $("deal").onclick = () => start({ players: NEW.crew, settings: NEW.rules });
   if ($("invite")) $("invite").onclick = () => makeInvite();
   wireWardrobe();
   wireLooks();
@@ -637,7 +655,7 @@ function joinedToast(inv) {
   t.querySelector(".x").onclick = () => t.remove();
   t.querySelector("a").onclick = () => t.remove();
   setTimeout(() => t.remove(), 30000);
-  if (location.hash === "#/" || location.hash === "") renderLobby();
+  if (location.hash === "#/" || location.hash === "" || location.hash === "#/new") renderLobby();
 }
 
 /** An invite link anyone can use, sent with the phone's Share sheet (or copied). */
@@ -1892,7 +1910,7 @@ async function renderReplay(id) {
           <div class="rname">${headOf(p.id, 26, G.loser === p.id && R.n === all.length)} <b>${esc(you(p.id))}</b>${p.out ? `<span class="outbadge">${p.out === 1 ? "Out first" : "Out"}</span>` : ""}</div>
           <div class="rcards">${p.hand.map((c) => card(c, { size: "sm", s: G.settings })).join("")}${p.up.length ? `<span class="sep">up</span>${p.up.map((c) => card(c, { size: "sm", s: G.settings })).join("")}` : ""}${p.down.length ? `<span class="sep">down</span>${p.down.map((c) => card(c, { size: "sm", s: G.settings, cls: "peek" })).join("")}` : ""}</div>
         </div>`).join("")}</div>
-        <p class="foot"><a href="#/highlights/${id}">📺 The highlights</a> · <a href="#/game/${id}">Back to the game</a> · <a href="#/logbook">Logbook</a></p>
+        <p class="foot"><a href="#/highlights/${id}">📺 The highlights</a> · <a href="#/game/${id}">Back to the game</a> · <a href="#/logbook">Recent games</a></p>
       </section>`;
     $("app").querySelectorAll("[data-vcr]").forEach((b) => (b.onclick = () => {
       const k = b.dataset.vcr;
@@ -2188,6 +2206,13 @@ function askName(current) {
   });
 }
 
+/** Stats is three pages under one tab (Carl, 15 Nov 2026): recent games, the 💩 league, your own numbers. */
+function statsTabs(on) {
+  store.set("gh:stats", on);
+  if (S.me && S.me.guest) return "";
+  const t = (k, label) => `<a class="seg${on === k ? " on" : ""}" href="#/${k}">${label}</a>`;
+  return `<nav class="segs" aria-label="Stats">${t("logbook", "Recent games")}${t("league", "League")}${t("record", "Your numbers")}</nav>`;
+}
 /* ---------- the Logbook: finished games between you and your friends (CountGuff's Logbook) ---------- */
 async function renderLogbook() {
   $("app").innerHTML = `<p class="loading">Pam is dusting off the logbook…</p>`;
@@ -2199,15 +2224,16 @@ async function renderLogbook() {
   const people = [...new Set(r.games.flatMap((g) => g.players))].filter((p) => p !== S.me.id && !isHouse(p));
   $("app").innerHTML = `
     <section class="logbook">
-      <h2>The logbook</h2>
+      ${statsTabs("logbook")}
+      <h2>Recent games</h2>
       <div class="chips wrap">
         <button class="chip${f === "all" ? " on" : ""}" data-lf="all">Everyone's</button>
         <button class="chip${f === "mine" ? " on" : ""}" data-lf="mine">Yours</button>
         ${people.map((p) => `<button class="chip person${f === p ? " on" : ""}" data-lf="${esc(p)}">${headOf(p, 22)}You v ${esc(nm(p))}</button>`).join("")}
       </div>
       <div class="tables">${rows.length ? rows.map((g) => `<a class="tablerow" href="#/replay/${g.id}">
-        <span class="thumb">${boardSvg({ id: g.id, names: g.players.map((p) => (p === S.me.id ? S.me.name : r.names[p] || p)), loser: g.loser ? (g.loser === S.me.id ? S.me.name : r.names[g.loser]) : null, size: 92 })}</span>
-        <span class="who"><span class="heads">${g.players.map((p) => headOf(p, 24, p === g.loser)).join("")}</span>${esc(g.players.map(nm).join(", "))}
+        ${(() => { const ps = [...g.players.filter((p) => !isHouse(p)), ...g.players.filter(isHouse)].slice(0, 4); const fs = ps.length === 1 ? 62 : ps.length === 2 ? 46 : 38; return `<span class="faces n${ps.length}">${ps.map((p) => headOf(p, fs, p === g.loser)).join("")}</span>`; })()}
+        <span class="who">${esc(g.players.map(nm).join(", "))}
           <small>${g.loser ? `💩 ${esc(nm(g.loser))}` : "Over"}${g.order.length ? ` · out first: ${esc(nm(g.order[0]))}` : ""}${g.practice ? " · practice" : ""}</small>
           <small class="soft">${new Date(g.finished).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</small></span>
         <span class="sc">📼</span></a>`).join("") : `<p class="soft">Nothing in the logbook yet.</p>`}</div>
@@ -2230,6 +2256,7 @@ async function renderLeague() {
   try { r = await api("/league"); } catch (e) { $("app").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
   $("app").innerHTML = `
     <section class="league">
+      ${statsTabs("league")}
       <h2>The 💩 league</h2>
       <p class="small">Only losing scores. Every time you're the Guffhead in a game with friends, you get a 💩. Going out first, second or whatever is fine. Games against just the house don't count.</p>
       ${r.current ? `<div class="card-panel wearing big">${headOf(r.current, 70, true)}<span><b>${esc(r.current === S.me.id ? "You're" : `${nameOf(r.current)} is`)} wearing it</b><small>until someone else loses</small></span></div>` : ""}
@@ -2256,7 +2283,8 @@ async function renderRecord() {
   const names = Object.fromEntries(games.flatMap((g) => g.players.map((p) => [p, p])));
   $("app").innerHTML = `
     <section class="record">
-      <h2>Your record</h2>
+      ${statsTabs("record")}
+      <h2>Your numbers</h2>
       <div class="card-panel bigstats">
         <div><b>${games.length}</b><small>games</small></div>
         <div><b>${lost}</b><small>times the Guffhead</small></div>
