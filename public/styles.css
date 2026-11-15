@@ -1040,3 +1040,12 @@ html:not([data-theme="britpop"]) .game .table .need { background: #fff; }
 /* the pile count hid under the "what goes" pill; the fan shows the pile anyway */
 .game.fit .pile > small { display: none; }
 html .game.fit .table .pile > small { display: none; }
+
+/* the face-up pick fits the phone, with Ready always in reach (15 Nov 2026) */
+.swap.choose .sorting { gap: 6px; margin: 2px 0 6px; }
+.swap.choose .sorter { padding: 2px 8px 2px 2px; font-size: .9rem; }
+.swap.choose .sorter .avatar { width: 24px; height: 24px; }
+.swap.choose .card-panel { padding-top: 10px; padding-bottom: 10px; margin: 6px 0; }
+.swap.choose .card-panel h3 { margin: 0 0 4px; }
+.swap.choose .card-panel .small { margin: 0 0 8px; }
+.swap.choose .actions { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 20; padding: 8px; border-radius: 18px; background: rgb(var(--panel-rgb) / .9); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); box-shadow: 0 6px 20px rgba(0, 0, 0, .15); }

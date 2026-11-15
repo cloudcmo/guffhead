@@ -33,7 +33,7 @@ const S = {
   sel: [],            // cards picked to play
   six: null,          // the swap: the three picked to go face up
   poll: 0, lastHere: 0, chatId: 0, chat: [],
-  tips: store.get("gh:tips") !== false,
+  tips: store.get("gh:tips") === true,   // off unless you ask (Carl, 15 Nov 2026: stop giving tips away for free)
   talk: store.get("gh:talk") !== false,
   playing: false,     // the catch-up is running
   skip: false,
@@ -1732,9 +1732,10 @@ function playSelected(quick = false) {
   const s = G.settings;
   const r = rankOf(S.sel[0]);
   const plain = G.options.plays.filter((p) => !isMagic(p.rank, s));
-  const warned = store.get("gh:magicWarned") || 0;
-  if (isMagic(r, s) && plain.length && !S.warnOk && warned < 4 && !(r === 10 && G.g.pile.length >= 6)) {
-    store.set("gh:magicWarned", warned + 1);
+  // a "Sure?" once a game at most, not every time: it shouldn't play the game for you (Carl, 15 Nov 2026)
+  const wk = `gh:magicWarned:${G.id}`;
+  if (isMagic(r, s) && plain.length && !S.warnOk && !store.get(wk) && !(r === 10 && G.g.pile.length >= 6)) {
+    store.set(wk, 1);
     S.warn = `Sure? ${({ 10: "That's your 10", 2: "That's your 2", 3: "That's your 3" })[r]}. ${cap(aCardName(plain[0].cards[0]))} would go.`;
     S.warnOk = true;
     renderGame();
@@ -1887,11 +1888,10 @@ function renderSwap(G) {
   const fresh = S.six.fresh; S.six.fresh = null;
   $("app").innerHTML = `
     <section class="game swap choose">
-      <div class="status"><p class="patter loud">${esc(say("swap", seedOf(G.id)))}</p></div>
       <div class="sorting">${others.map((p) => `<span class="sorter">${headOf(p.id, 28, wears(G, p.id))}<b>${esc(nameOf(p.id))}</b><small>${waiting.includes(p.id) ? "choosing…" : "ready ✓"}</small></span>`).join("")}</div>
       <div class="card-panel blindbox">
         <h3>Your blind cards</h3>
-        <p class="small">Nobody sees these, you included. Put three of your cards face up on top of them: you'll play those once your hand has gone, before the blind ones.</p>
+        <p class="small">Nobody sees these, not even you. Your three face-up cards sit on top.</p>
         <div class="blinds">${[0, 1, 2].map((i) => `<div class="bslot">${back({ size: "lg" })}${up[i] ? `<span class="ontop${fresh === up[i] ? " landed" : ""}" data-take="${up[i]}" role="button" tabindex="0" aria-label="Take back ${cardName(up[i])}">${card(up[i], { size: "lg", s })}</span>` : `<span class="hole">${i + 1}</span>`}</div>`).join("")}</div>
       </div>
       <div class="card-panel handbox">
@@ -1899,10 +1899,11 @@ function renderSwap(G) {
         <div class="sixcards">${hand.map((c) => `<span data-put="${c}" role="button" tabindex="0" aria-label="Put ${cardName(c)} face up">${card(c, { size: "lg", s, cls: up.length < 3 ? "" : "kept" })}</span>`).join("")}</div>
         ${up.length ? `<p class="small soft">Tap a face-up card to take it back.</p>` : ""}
       </div>
-      ${S.tips ? `<p class="hint">🎓 Most people put their highest cards${s.tenBurn ? ", 10s" : ""}${s.twoReset ? " and 2s" : ""} face up, and keep low cards in hand to get rid of early.</p>` : ""}
+      ${S.tips || S.swapHelp === G.id ? `<p class="hint">🎓 Most people put their highest cards${s.tenBurn ? ", 10s" : ""}${s.twoReset ? " and 2s" : ""} face up, and keep low cards in hand to get rid of early.</p>` : ""}
       <div class="actions">
         <button class="btn gold big" id="readyBtn"${up.length === 3 ? "" : " disabled"}>${up.length === 3 ? "Ready" : `Pick ${3 - up.length} more`}</button>
         ${G.suggest && G.suggest.length === 3 && !sameSet(up, G.suggest) ? `<button class="btn ghost" id="botPick">Let GuffBot pick</button>` : ""}
+        ${S.tips || S.swapHelp === G.id ? "" : `<button class="linkish" id="swapHelp">🎓 Any tips?</button>`}
       </div>
       <p class="small soft">${waiting.length ? `Still choosing: ${esc(waiting.map((p) => names[p]).join(", "))}.` : "Everyone else is ready."}</p>
       <details class="log"><summary>This table's house rules</summary><ul class="rulelist">${describeRules(s).map(([k, v]) => `<li><b>${esc(k)}</b> ${esc(v)}</li>`).join("")}</ul></details>
@@ -1914,6 +1915,7 @@ function renderSwap(G) {
     S.six.up = [...S.six.up, el.dataset.put]; S.six.fresh = el.dataset.put; snap(); buzz(8); tellDoing(); renderSwap(G);
   }));
   app.querySelectorAll("[data-take]").forEach((el) => (el.onclick = () => { S.six.up = S.six.up.filter((x) => x !== el.dataset.take); tellDoing(); renderSwap(G); }));
+  if ($("swapHelp")) $("swapHelp").onclick = () => { S.swapHelp = G.id; renderSwap(G); };
   if ($("botPick")) $("botPick").onclick = () => { S.six.up = G.suggest.slice(); renderSwap(G); };
   $("redeal").onclick = () => { store.del(dealtKey(G.id)); renderSwap(G); };
   $("readyBtn").onclick = () => { if (S.six.up.length === 3) doAct({ act: "ready", up: S.six.up.slice() }); };
