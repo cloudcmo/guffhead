@@ -1000,3 +1000,19 @@ html[data-theme="pub"] .gamebar .invbar, html[data-theme="britpop"] .gamebar .in
 .game.fit.tight .known, .game.fit.tight .turnbar .tb-last { display: none; }
 .game.fit.tighter .opps .card { --w: 34px; }
 .game.fit.tighter .table { min-height: 96px; }
+
+/* the table is a gingham tablecloth now, no beer mat (Carl, 15 Nov 2026); the pool table look keeps its baize */
+html:not([data-theme="britpop"]) .game .table {
+  background-color: #FFFDF8;
+  background-image: linear-gradient(90deg, rgba(214, 48, 49, .26) 50%, transparent 50%), linear-gradient(rgba(214, 48, 49, .26) 50%, transparent 50%);
+  background-size: 26px 26px;
+  border: 0; box-shadow: 0 2px 4px rgba(16, 24, 40, .06), 0 10px 26px rgba(16, 24, 40, .12);
+}
+.game .pile .mat { display: none; }
+.game .pile .card, .game .stack .card, .slidecard .card { box-shadow: 0 2px 2px rgba(0, 0, 0, .12), 0 6px 14px rgba(0, 0, 0, .22); }
+html:not([data-theme="britpop"]) .game .table small { display: inline-block; background: rgba(255, 255, 255, .92); color: #2A2F3A; text-shadow: none; padding: 2px 9px; border-radius: 999px; }
+html:not([data-theme="britpop"]) .game .table .stack.empty { border-color: rgba(42, 47, 58, .35); background: rgba(255, 255, 255, .6); }
+html:not([data-theme="britpop"]) .game .table .need { background: #fff; }
+/* the card skimming across to the pile */
+.slidecard { position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none; display: flex; will-change: transform; }
+.slidecard > span + span { margin-left: -60%; }

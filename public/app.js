@@ -943,6 +943,15 @@ async function catchUp(evs, away, track = null) {
       body.innerHTML = stageCard(e, names);
       body.firstElementChild.classList.add(big ? "pop" : "slide");
     }
+    if (pile && (e.k === "play" || (e.k === "flip" && !e.ok))) {
+      const from = document.querySelector(`.pod[data-pid="${e.p}"]`) || (e.p === S.me.id ? document.querySelector(".mine") : null);
+      const cs = e.k === "play" ? e.cards : [e.card];
+      const pl = pile.length;
+      pile.splice(pl - cs.length, cs.length);   // not on the pile until it lands
+      showPile();
+      await slideIn(from, cs, pl);
+      pile.push(...cs);
+    }
     showPile();
     if (e.k === "play" && e.burn) { whoosh(); buzz([40, 30, 40]); body.querySelector(".stagecards") && body.querySelector(".stagecards").classList.add("burning"); }
     else if (e.k === "play" || e.k === "flip") snap(e.cards ? e.cards.length : 1);
@@ -1145,6 +1154,34 @@ function rotate(seats, me) {
 }
 function needClass(g, s) { const w = needWords(g.pile, s); return /anything/i.test(w) ? " easy" : /aces|king|queen|or lower/i.test(w) ? " tough" : ""; }
 
+/** A card sliding from whoever played it onto the pile, spinning as it goes, a different amount each time, like a
+ *  real card skimmed across a table (Carl, 15 Nov 2026). It lands at the same angle the pile then draws it. */
+function slideIn(fromEl, cards, pileLen) {
+  const to = document.querySelector("#pile .fan") || $("pile");
+  if (!fromEl || !to || !cards || !cards.length || reduced()) return Promise.resolve();
+  const a = fromEl.getBoundingClientRect(), b = to.getBoundingClientRect();
+  if (!a.width || !b.width) return Promise.resolve();
+  const last = cards[cards.length - 1];
+  const seed = seedOf(last + pileLen + S.G.id);
+  const end = (seedOf(last + (pileLen - 1)) % 21) - 10;   // the angle pileHtml gives the top card
+  const spin = (seed % 2 ? 1 : -1) * (30 + (seed % 330));  // anything from a nudge to a full turn
+  const f = document.createElement("div");
+  f.className = "slidecard";
+  f.innerHTML = cards.map((c, i) => `<span style="--i:${i}">${card(c, { size: "md", s: S.G.settings })}</span>`).join("");
+  document.body.appendChild(f);
+  const w = f.getBoundingClientRect();
+  const one = f.querySelector(".card").getBoundingClientRect().width || w.width;
+  // start the size of the card it left, finish the size of the cards on the pile
+  const pw = parseFloat(getComputedStyle($("pile") || to).getPropertyValue("--pw")) || one;
+  const s0 = Math.max(.5, Math.min(1.4, a.width / one)), s1 = pw / one;
+  const x0 = a.left + a.width / 2 - w.width / 2, y0 = a.top + a.height / 2 - w.height / 2;
+  const x1 = b.left + b.width / 2 - w.width / 2, y1 = b.top + b.height / 2 - w.height / 2;
+  const anim = f.animate([
+    { transform: `translate(${x0}px, ${y0}px) rotate(${end - spin}deg) scale(${fromEl.classList.contains("card") ? s0 : .6})` },
+    { transform: `translate(${x1}px, ${y1}px) rotate(${end}deg) scale(${s1})` },
+  ], { duration: 480 + (seed % 220), easing: "cubic-bezier(.15, .75, .3, 1)", fill: "forwards" });
+  return anim.finished.then(() => f.remove(), () => f.remove());
+}
 function pileHtml(g, s) {
   if (!g.pile.length) return `<span class="mat"></span><span class="fan"></span>`;
   const top = g.pile.slice(-4);
@@ -1686,7 +1723,14 @@ function playSelected(quick = false) {
     return;
   }
   S.warn = null; S.warnOk = false;
-  doAct({ act: "play", cards: S.sel.slice() });
+  const cards = S.sel.slice();
+  const from = document.querySelector(`.mine [data-card="${cards[0]}"]`);
+  if (from && !S.busy) {
+    document.querySelectorAll(cards.map((c) => `.mine [data-card="${c}"]`).join(",")).forEach((el) => (el.style.visibility = "hidden"));
+    slideIn(from, cards, G.g.pile.length + cards.length).then(() => doAct({ act: "play", cards }));
+    return;
+  }
+  doAct({ act: "play", cards });
 }
 const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
 const aCardName = (c) => `${c[0] === "A" || c[0] === "8" ? "an" : "a"} ${cardName(c)}`;
