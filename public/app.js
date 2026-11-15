@@ -233,6 +233,7 @@ function route() {
   paper(gm ? seedOf(gm[2]) : BAR_SEED);
   nav(h);
   stopIdle();
+  if (!gm || gm[1] !== "game") S.pubTried = null;   // a fresh chance of pub life next time you sit down
   const nt = $("nexttoast"); if (nt) nt.remove();
   let m;
   if ((m = h.match(/^#\/join\/([a-z0-9]{8})/))) return renderJoin(m[1]);
@@ -1080,7 +1081,7 @@ function renderGame(staging = false) {
   wireGame();
   renderChat();
   fitHand();
-  if (!staging) { bringMyGoIntoView(G); startIdle(G); }
+  if (!staging) { bringMyGoIntoView(G); startIdle(G); pubLife(G); }
   squeeze();
   // (the "Ooh, a pair of 10s!" bubbles when play starts are gone: they read as comments on a play that hadn't
   // happened. Casual player review, 14 Nov 2026. The deal keeps its ooh and lol.)
@@ -1218,10 +1219,19 @@ function slideAway(toEl, cards) {
   });
   return Promise.all(runs);
 }
+/** Once the pile's more than three deep, say how many, getting smellier as it grows (Carl, 15 Nov 2026: "imply
+ *  that's a lot of poo to pick up as the amount increases"). Stink lines from 9, flies from 13. */
+function heapTag(n) {
+  if (n <= 3) return "";
+  const [cls, words] = n <= 5 ? ["h1", `${n} cards`] : n <= 8 ? ["h2", `${n}. A fair old heap 💩`] : n <= 12 ? ["h3", `${n}. Getting whiffy 💩💩`] : n <= 17 ? ["h4", `${n}! Hold your nose 💩💩💩`] : ["h5", `${n}!! Call the council 💩💩💩`];
+  const stink = n >= 9 ? `<span class="stink"><i>〰</i><i>〰</i><i>〰</i></span>` : "";
+  const flies = n >= 13 ? `<span class="flies"><i>🪰</i>${n >= 18 ? "<i>🪰</i>" : ""}</span>` : "";
+  return `${stink}${flies}<span class="heap ${cls}">${words}</span>`;
+}
 function pileHtml(g, s) {
   if (!g.pile.length) return `<span class="mat"></span><span class="fan"></span>`;
   const top = g.pile.slice(-4);
-  return `<span class="mat"></span><span class="fan">${top.map((c, i) => `<span class="pc" style="--i:${i};--r:${((seedOf(c + g.pile.length - top.length + i) % 21) - 10)}deg">${card(c, { size: "md", s })}</span>`).join("")}</span>`;
+  return `<span class="mat"></span><span class="fan">${top.map((c, i) => `<span class="pc" style="--i:${i};--r:${((seedOf(c + g.pile.length - top.length + i) % 21) - 10)}deg">${card(c, { size: "md", s })}</span>`).join("")}${heapTag(g.pile.length)}</span>`;
 }
 
 function oppPod(G, p, turnId, nextId) {
@@ -1608,7 +1618,7 @@ async function shareIt(G, text, withBoard = false) {
 }
 
 /* ---------- Biscuit pays a visit if you stare at your go for a minute (Words and Guff's idle animation) ---------- */
-function stopIdle() { clearTimeout(S.idleT); const d = $("biscuit"); if (d) d.remove(); }
+function stopIdle() { clearTimeout(S.idleT); clearTimeout(S.pubT); const d = $("biscuit"); if (d) d.remove(); document.querySelectorAll(".pubbit").forEach((x) => x.remove()); }
 function startIdle(G) {
   stopIdle();
   if (!G.myGo || G.status !== "playing" || G.g.phase !== "play" || reduced()) return;
@@ -1624,6 +1634,100 @@ function startIdle(G) {
     setTimeout(() => d.classList.add("leave"), 6500);
     setTimeout(() => d.remove(), 8000);
   }, 60000);
+}
+
+/* ---------- pub life (Carl, 15 Nov 2026): now and then, something happens in the pub. A packet of crisps lands on the
+   table, someone's told it's their round, a tray of drinks comes over (and somebody gets a cocktail with an umbrella),
+   Wonderwall goes on the jukebox. Rare on purpose: at most one roll each time you open a game, about a one in three
+   chance, and no more than two in a game per day, so it stays a surprise. ---------- */
+const PUB = ["crisps", "round", "tray", "scratchings", "jukebox", "darts", "bell", "biscuit"];
+function pubLife(G) {
+  if (G.status !== "playing" || G.g.phase !== "play" || reduced() || S.pubTried === G.id) return;
+  S.pubTried = G.id;
+  const force = new URLSearchParams(location.search).get("pub");   // ?pub=tray to see one straight away
+  if (force && PUB.includes(force)) { setTimeout(() => S.G && pubMoment(S.G, force), 1500); return; }
+  const k = `gh:pub:${G.id}:${tonight()}`, n = store.get(k) || 0;
+  if (n >= 2 || Math.random() > 0.35) return;
+  clearTimeout(S.pubT);
+  S.pubT = setTimeout(() => {
+    if (!S.G || S.G.id !== G.id || S.playing || S.sheet || location.hash !== `#/game/${G.id}`) return;
+    const late = new Date().getHours() >= 22;
+    const last = store.get("gh:pub:last");
+    const pool = PUB.filter((m) => m !== last && (m !== "bell" || late));
+    const m = pool[Math.floor(Math.random() * pool.length)];
+    store.set(k, n + 1); store.set("gh:pub:last", m);
+    pubMoment(S.G, m);
+  }, 7000 + Math.random() * 16000);
+}
+const anyOf = (a) => a[Math.floor(Math.random() * a.length)];
+function seatEl(pid) {
+  if (pid === S.me.id) return document.querySelector(".mine .avatar") || document.querySelector(".mine");
+  const pod = document.querySelector(`.pod[data-pid="${pid}"]`);
+  return pod ? pod.querySelector(".podav") || pod : null;
+}
+function pubProp(html, cls, ms = 7000) {
+  const t = $("table");
+  if (!t) return null;
+  const el = document.createElement("div");
+  el.className = `pubbit pubprop ${cls}`;
+  el.innerHTML = html;
+  t.appendChild(el);
+  setTimeout(() => el.classList.add("gone"), ms);
+  setTimeout(() => el.remove(), ms + 600);
+  return el;
+}
+function pubMoment(G, m) {
+  const seats = G.g.seats.map((p) => p.id);
+  const others = seats.filter((p) => p !== S.me.id);
+  const who = anyOf(others);
+  const nm = (p) => (p === S.me.id ? S.me.name : nameOf(p));
+  const say = (p, text, at = 900) => setTimeout(() => bubble(seatEl(p), text, "", 3400), at);
+  if (m === "crisps") {
+    const f = anyOf([["DRY ROASTED", "dry", "Anyone want some dry roasted?"], ["SALT & VINEGAR", "sv", "Crisps! Salt and vinegar, I'm afraid."], ["PRAWN COCKTAIL", "prawn", "Who opened the prawn cocktail? It's everywhere."], ["CHEESE & ONION", "co", "Cheese and onion. Breathe the other way, please."]]);
+    pubProp(`<span class="packet ${f[1]}"><b>${f[0]}</b></span>`, "crisps");
+    say(who, f[2]);
+  } else if (m === "round") {
+    const to = anyOf(seats.filter((p) => p !== who));
+    say(who, anyOf([`${nm(to)}, it's your round. Get them in.`, `Whose round is it? ${nm(to)}'s, I reckon.`, `${nm(to)}'s been nursing that half for an hour.`, `Same again, ${nm(to)}? Lovely, ta.`]), 300);
+  } else if (m === "tray") {
+    pubProp(`<span class="tray">🍺🍺🍹🍺</span>`, "traycross", 2600);
+    const fancy = anyOf(seats);
+    seats.forEach((p, i) => setTimeout(() => {
+      const el = seatEl(p); if (!el) return;
+      const r = el.getBoundingClientRect();
+      const d = document.createElement("div");
+      d.className = "pubbit drink"; d.textContent = p === fancy ? anyOf(["🍹", "🍸"]) : Math.random() < 0.15 ? "🥤" : "🍺";
+      d.style.left = `${r.right - 6}px`; d.style.top = `${r.bottom - 22}px`;
+      document.body.appendChild(d);
+      setTimeout(() => d.classList.add("gone"), 11000); setTimeout(() => d.remove(), 11600);
+    }, 1400 + i * 260));
+    const teaser = anyOf(seats.filter((p) => p !== fancy)) || who;
+    say(teaser, anyOf([`Nice umbrella, ${nm(fancy)}.`, `${nm(fancy)}, who orders a cocktail in here?`, `Pint for everyone. And whatever ${nm(fancy)}'s got.`]), 2600 + seats.length * 260);
+  } else if (m === "scratchings") {
+    pubProp(`<span class="packet pork"><b>PORK SCRATCHINGS</b></span>`, "crisps");
+    say(who, anyOf(["Pork scratching? No? More for me.", "Mind your fillings on these.", "Proper pub food, this."]));
+  } else if (m === "jukebox") {
+    const b = document.createElement("div");
+    b.className = "pubbit notes"; b.innerHTML = "<span>🎵</span><span>🎶</span><span>🎵</span>";
+    document.body.appendChild(b); setTimeout(() => b.remove(), 6500);
+    say(who, anyOf(["Who's put Wonderwall on again?", "Not Mr Brightside. Not again.", "Come On Eileen. Brace yourselves.", "Someone's put Sweet Caroline on. Here we go."]), 1200);
+  } else if (m === "darts") {
+    const d = document.createElement("div");
+    d.className = "pubbit dart"; d.textContent = "🎯";
+    document.body.appendChild(d); setTimeout(() => d.remove(), 2000);
+    say(who, anyOf(["That nearly had my eye out!", "Sorry! Sorry. The darts lot.", "Treble twenty, my foot."]), 1300);
+  } else if (m === "bell") {
+    const b = document.createElement("div");
+    b.className = "pubbit bell"; b.textContent = "🔔";
+    document.body.appendChild(b); setTimeout(() => b.remove(), 4000);
+    say(who, anyOf(["Last orders! Quick, play something.", "Last orders. One more hand?", "That's the bell. Same again?"]), 900);
+  } else if (m === "biscuit") {
+    const d = document.createElement("div");
+    d.id = "biscuit"; d.className = "biscuit pubbit";
+    d.innerHTML = `<span class="dog">🐕</span><span class="bubble">${anyOf(["Biscuit wanders through, looking for dropped crisps.", "Biscuit has found a chip. Biscuit is happy.", "Biscuit sniffs the table. Nothing. Moves on."])}</span>`;
+    document.body.appendChild(d);
+    setTimeout(() => d.classList.add("leave"), 5500); setTimeout(() => d.remove(), 7000);
+  }
 }
 
 // the How it works card can be reopened from the Rules tab
@@ -1819,7 +1923,7 @@ const OOH = { A: ["Ooh, an ace!", "Aah, an ace.", "An ace! Lovely."], K: ["Ooh, 
   J: ["Ooh, a jack.", "Not bad!", "Aah!"], T: ["A 10! Burner.", "Ooh, a 10.", "Lovely, a 10."], 2: ["A 2! Handy.", "Ooh, a 2.", "Aah, a 2."], 3: ["Ooh, a sneaky 3."] };
 const LOL = ["lol", "Snigger.", "Hehe.", "Unlucky!", "Bless.", "Ha!", "Oh dear.", "lol, a {c}", "A {c}. Bless."];
 const JAMMY = ["Jammy.", "Typical.", "Lucky so-and-so."];
-function bubble(el, text, kind = "") {
+function bubble(el, text, kind = "", ms = 1250) {
   if (!el) return;
   const r = el.getBoundingClientRect();
   const b = document.createElement("div");
@@ -1829,8 +1933,8 @@ function bubble(el, text, kind = "") {
   const w = b.offsetWidth;
   b.style.left = `${Math.max(6, Math.min(window.innerWidth - w - 6, r.left + r.width / 2 - w / 2))}px`;
   b.style.top = `${Math.max(6, r.top - b.offsetHeight - 6)}px`;
-  setTimeout(() => b.classList.add("gone"), 1250);
-  setTimeout(() => b.remove(), 1600);
+  setTimeout(() => b.classList.add("gone"), ms);
+  setTimeout(() => b.remove(), ms + 350);
 }
 
 /** The deal, played out: three face-down each, then six each; yours land face up, and the table reacts. */
