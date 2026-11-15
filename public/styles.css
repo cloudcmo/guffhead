@@ -1100,3 +1100,13 @@ html .game.fit .table .pile > small { display: none; }
 .reveal.good .rv-face .card { box-shadow: 0 0 0 4px #2FBF71, 0 0 30px rgba(47, 191, 113, .8); }
 .reveal.bad .rv-face .card { box-shadow: 0 0 0 4px #E0362C, 0 0 30px rgba(224, 54, 44, .7); animation: nope .4s ease-in-out 2; }
 @keyframes nope { 25% { translate: -6px 0; } 75% { translate: 6px 0; } }
+
+/* catch-up commentary under the table, so the pile is always in view (15 Nov 2026) */
+.game .stage.below { position: relative; inset: auto; margin: 6px 0; min-height: 0; max-height: 116px; overflow: hidden; padding: 6px 10px 8px; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end;
+  background: rgba(255, 255, 255, .97); color: #1A1C22; border: 2px dashed rgb(var(--accent-rgb) / .45); border-radius: 16px; box-shadow: 0 4px 14px rgba(16, 24, 40, .12); }
+.game .stage.below[hidden] { display: none; }
+.game .stage.below .stagehead { margin-bottom: 2px; color: #5B6472; font: 800 .8rem var(--body); font-style: normal; }
+.game .stage.below .stagehead .linkish { color: #4F46E5; }
+.game .stage.below .pose { display: none; }
+.game .stage.below .stagecard { grid-template-columns: auto auto 1fr; gap: 8px; }
+.game .stage.below .stagetext { font-size: .95rem; line-height: 1.25; }

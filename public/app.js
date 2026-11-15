@@ -940,7 +940,7 @@ async function catchUp(evs, away, track = null) {
       // played what"); the cards themselves land on the real pile above
       body.querySelectorAll(".cline.now").forEach((x) => x.classList.remove("now"));
       body.insertAdjacentHTML("beforeend", catchLine(e, names));
-      while (body.children.length > 3) body.firstElementChild.remove();
+      while (body.children.length > (document.body.classList.contains("fit") ? 2 : 3)) body.firstElementChild.remove();
     } else {
       body.innerHTML = stageCard(e, names);
       body.firstElementChild.classList.add(big ? "pop" : "slide");
@@ -1054,10 +1054,11 @@ function renderGame(staging = false) {
         <div class="burnt">${g.burned ? `<span class="ash">🔥</span><small>${g.burned} burned</small>` : `<span class="ash dim">🔥</span><small>None burned</small>`}</div>
         ${g.phase === "play" ? `<div class="need${needClass(g, s)}">${esc(needWords(g.pile, s))}</div>` : ""}
         ${s.seven === "reverse" && g.phase === "play" && g.seats.filter((p) => !p.out).length > 2 ? `<div class="dir${S.lastDir && S.lastDir !== g.dir ? " flipped" : ""}" title="Direction of play">${g.dir === 1 ? "↻" : "↺"}</div>` : ""}
-        <div class="stage" id="stage" hidden></div>
+        ${fit ? "" : `<div class="stage" id="stage" hidden></div>`}
       </div>
       ${chatty && !fit ? chatPeek() : ""}
-      ${fit ? turnBanner(G, turnId) : ""}
+      ${/* on a live game the commentary goes under the table, never over the cards (Carl, 15 Nov 2026) */ ""}
+      ${fit ? `<div class="stage below" id="stage" hidden></div>${S.playing ? "" : turnBanner(G, turnId)}` : ""}
       ${meSeat ? myArea(G, meSeat, turnId) : `<p class="watching card-panel">👀 You're watching this one. <a href="#/replay/${G.id}">Watch the replay ▸</a></p>`}
       <div class="actions" id="actions">${actionsHtml(G)}</div>
       ${!fit && G.myGo && S.tips && G.hint && !staging ? `<p class="hint">🎓 ${esc(G.hint)}</p>` : ""}
