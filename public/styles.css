@@ -966,3 +966,6 @@ html[data-theme="pub"] .gamebar .invbar, html[data-theme="britpop"] .gamebar .in
 .leaguesnip.slim em { font-style: normal; font-weight: 800; color: var(--gold); white-space: nowrap; font-size: .9rem; }
 .lobby a.leaguesnip.slim { flex-direction: row; text-align: left; justify-content: flex-start; padding: 6px 14px 6px 8px; border-radius: 999px; }
 .lobby a.leaguesnip.slim > * { margin: 0; }
+
+/* opponents: people bold, house robots light (15 Nov 2026) */
+.tablerow .who .names .bot { font-weight: 500; opacity: .75; }

@@ -555,7 +555,9 @@ function rulesShort(R) {
 
 const NUDGE_MS = 2 * 3600000;
 function tableRow(g) {
-  const heads = g.opps.map((p) => headOf(p, 26, g.wearer === p)).join("");
+  // humans first, robots after and in a lighter weight: you scan for which person you're playing (Carl, 15 Nov 2026)
+  const opps = [...g.opps.filter((p) => !isHouse(p)), ...g.opps.filter(isHouse)];
+  const heads = opps.map((p) => headOf(p, 26, g.wearer === p)).join("");
   const thumb = `<span class="thumb">${boardSvg({ id: g.id, names: g.players.map((p) => (p === S.me.id ? S.me.name : g.names[p])), loser: g.status === "playing" ? null : g.names[g.loser] || null, size: 92 })}</span>`;
   const looking = (g.looking || []).filter((p) => !isHouse(p));
   const humansWaiting = g.required.filter((p) => p !== S.me.id && !isHouse(p));
@@ -563,7 +565,7 @@ function tableRow(g) {
   const extra = looking.length ? `<small class="looking">${esc(looking.map((p) => g.names[p]).join(" and "))} ${looking.length > 1 ? "are" : "is"} looking 👀</small>`
     : canNudge ? `<button class="chip nudge" data-nudge="${g.id}">👉 Nudge ${esc(humansWaiting.map((p) => g.names[p]).join(" and "))}</button>`
     : g.nudgedAt && g.status === "playing" && Date.now() - g.nudgedAt < NUDGE_MS ? `<small class="soft">Nudged ${ago(g.nudgedAt)}</small>` : "";
-  const who = g.opps.map((p) => esc(g.names[p] || nameOf(p))).join(", ");
+  const who = `<span class="names">${opps.map((p) => `<span class="${isHouse(p) ? "bot" : "hum"}">${esc(g.names[p] || nameOf(p))}</span>`).join(", ")}</span>`;
   let what;
   if (g.status !== "playing") what = g.loser === S.me.id ? "💩 You were the Guffhead" : g.loser ? `${esc(g.names[g.loser])} was the Guffhead` : "Over";
   else if (g.myGo) what = g.phase === "swap" ? "<b>Pick your face-up cards</b>" : "<b>Your go</b>";
