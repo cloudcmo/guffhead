@@ -1198,7 +1198,7 @@ function oppPod(G, p, turnId, nextId) {
   const known = (p.known || []).slice();
   const out = p.out ? `<span class="outbadge">${p.out === 1 ? "Out first" : "Out"}</span>` : "";
   return `<div class="pod${turn ? " turn" : ""}${p.out ? " isout" : ""}${G.loser === p.id ? " guffhead" : ""}" data-pid="${p.id}">
-    <div class="podhead"><span class="podav">${headOf(p.id, 34, wears(G, p.id), S.drop && wears(G, p.id))}</span><span class="podname">${esc(nameOf(p.id))}${here ? `<i class="dot" title="At the table now"></i>` : ""}${status}${p.out ? "" : `<small class="podcount">${hand} in hand</small>`}${dangerTag(p.id)}</span>${out}</div>
+    <div class="podhead"><span class="podav">${headOf(p.id, 34, wears(G, p.id), S.drop && wears(G, p.id))}</span><span class="podname">${esc(nameOf(p.id))}${here ? `<i class="dot" title="At the table now"></i>` : ""}${status}${p.out ? "" : podCount(p, hand)}${dangerTag(p.id)}</span>${out}</div>
     <div class="podcards">
       <span class="tablecards">${tableStack(p, "op", G.settings)}</span>
     </div>
@@ -1217,6 +1217,23 @@ function dangerOf(G) {
 }
 const dangerTag = (pid) => (S.danger === pid ? `<small class="danger" title="Most cards left: heading for the 💩"><i>💩</i> in danger</small>` : "");
 /** Face-down cards with the face-up ones sitting on them. */
+/** "Play these now" over your face-up cards: a quick pointer the first time they're yours to play, then it fades
+ *  (Carl, 15 Nov 2026: it stayed too long). Re-renders carry on the same fade rather than starting it again. */
+function upTag(G) {
+  S.upTag = S.upTag || {};
+  const t0 = S.upTag[G.id] || (S.upTag[G.id] = Date.now());
+  const age = Date.now() - t0;
+  return age > 2600 ? "" : `<span class="locktag go fading" style="animation-delay:-${age}ms">▾ play these now</span>`;
+}
+/** How many cards they hold, as a little fan you can count at a glance, and once their face-up cards are gone, how
+ *  many blind ones are left (Carl, 15 Nov 2026: "important to be clear how many cards they have in their hand as
+ *  well as how many they have left in the blind pile"). */
+function podCount(p, hand) {
+  const downs = typeof p.down === "number" ? p.down : 0;
+  const fan = hand ? `<span class="minifan" style="--n:${Math.min(hand, 8)}">${Array.from({ length: Math.min(hand, 8) }, (_, i) => `<i style="--i:${i}"></i>`).join("")}</span>` : "";
+  const blind = !p.up.length && downs ? `<span class="blindn">${downs} face down</span>` : "";
+  return `<small class="podcount">${fan}<span>${hand ? `${hand} in hand` : "Hand empty"}</span>${blind}</small>`;
+}
 function tableStack(p, size, s, o = {}) {
   const downs = typeof p.down === "number" ? p.down : 0;
   const n = Math.max(downs, p.up.length, 0);
@@ -1246,7 +1263,7 @@ function myArea(G, me, turnId) {
     <div class="myhead">${headOf(me.id, 34, wears(G, me.id), S.drop && wears(G, me.id))}<b>You${S.danger === me.id ? ` <small class="danger me" title="You've got the most cards left: heading for the 💩"><i>💩</i> danger</small>` : ""}</b>${me.out ? `<span class="outbadge">${me.out === 1 ? "Out first" : "Out"}</span>` : ""}${wears(G, me.id) && G.status === "playing" ? `<small class="soft">💩 from last time</small>` : ""}${canAuto ? `<button class="chip autobtn${ap ? " on" : ""}" id="autoBtn" aria-expanded="${!!S.autoMenu}">🤖 ${ap ? "On" : "Auto"}</button>` : ""}</div>
     ${canAuto && S.autoMenu && !ap ? autoMenu() : ""}
     ${canAuto && ap ? `<p class="autoline">🤖 ${ap.left == null ? "GuffBot's playing for you until you're back." : ap.left === 1 ? "GuffBot's got your next go." : `GuffBot's got your next ${ap.left} goes.`} <button class="linkish" data-auto="off">Stop</button></p>` : ""}
-    <div class="mytable${zone === "hand" ? " locked" : ""}">${tableStack(me, "sm", s, { tapUp: myGo && zone === "up", tapDown: myGo && zone === "down", dimUp: zone === "hand" })}${zone === "hand" && (me.up.length || me.down) ? `<span class="locktag">🔒 after your hand</span>` : zone === "up" && myGo ? `<span class="locktag go">▾ play these now</span>` : ""}</div>
+    <div class="mytable${zone === "hand" ? " locked" : ""}">${tableStack(me, "sm", s, { tapUp: myGo && zone === "up", tapDown: myGo && zone === "down", dimUp: zone === "hand" })}${zone === "hand" && (me.up.length || me.down) ? `<span class="locktag">🔒 after your hand</span>` : zone === "up" && myGo ? upTag(G) : ""}</div>
     ${prepick && S.sel.length ? `<p class="prepicked">Picked for your go. It'll be played only if it still goes, and only when you tap Play.</p>` : ""}
     <div class="hand" id="hand">${hand.length ? hand.map((c) => card(c, { size: "md", tap: myGo || prepick, sel: S.sel.includes(c), dim: myGo && !playable.has(c), s })).join("") : me.out ? `<p class="soft">You're out. ${G.status === "playing" ? "Sit back and enjoy the show." : ""}</p>` : `<p class="soft small">${zone === "up" ? "Hand's empty: play from your face-up cards." : zone === "down" ? "Blind now: tap a face-down card." : ""}</p>`}</div>
   </div>`;

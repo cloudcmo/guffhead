@@ -1016,3 +1016,19 @@ html:not([data-theme="britpop"]) .game .table .need { background: #fff; }
 /* the card skimming across to the pile */
 .slidecard { position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none; display: flex; will-change: transform; }
 .slidecard > span + span { margin-left: -60%; }
+
+/* "play these now" fades quickly (15 Nov 2026) */
+.locktag.fading { animation: tagfade 2.6s ease forwards; }
+@keyframes tagfade { 0%, 60% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+/* opponents: a countable fan for their hand, and their blind cards once the face-up ones are gone */
+.podcount { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 6px; }
+.minifan { position: relative; display: inline-block; height: 16px; width: calc(11px + var(--n, 7) * 0px); }
+.minifan { display: inline-flex; }
+.minifan i { display: inline-block; width: 11px; height: 16px; border-radius: 2px; background: linear-gradient(135deg, #6C63FF, #4338CA); border: 1px solid #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); margin-left: -5px; transform: rotate(calc((var(--i) - 3) * 4deg)); transform-origin: 50% 120%; }
+.minifan i:first-child { margin-left: 0; }
+.blindn { font-weight: 800; color: var(--gold); }
+.blindn::before { content: "· "; color: var(--soft); font-weight: 700; }
+.minifan { height: 20px; align-items: flex-end; padding: 0 2px; }
+.minifan i { width: 13px; height: 19px; margin-left: -3px; transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * 9deg)); transform-origin: 50% 140%; }
+.minifan i { flex: none; margin-left: -4px; } .minifan i:first-child { margin-left: 0; }
+.minifan { width: auto; flex: none; margin-right: 2px; }
