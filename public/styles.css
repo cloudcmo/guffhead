@@ -948,3 +948,12 @@ html[data-theme="pub"] .gamebar .invbar, html[data-theme="britpop"] .gamebar .in
 .amain > .atag { margin-left: 4px; vertical-align: 2px; }
 .admin .amain[data-deal] { cursor: pointer; }
 .abtns .chip.play { background: var(--gold); border-color: var(--gold); color: #fff; }
+
+/* Your area as a grid (Carl, 15 Nov 2026: the Auto button sat over the first card in your hand). You and the Auto
+   button in their own column on the left, the face-up cards beside them, the hand on its own row underneath, so
+   nothing can overlap however many cards you hold. */
+.mine { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: start; }
+.mine > * { grid-column: 1 / -1; }
+.mine > .myhead { grid-column: 1; grid-row: 1; position: static; width: auto; max-width: 112px; }
+.mine > .mytable { grid-column: 2; grid-row: 1; margin: 0 0 4px; }
+.mine > .myhead .danger.me { white-space: normal; }
