@@ -969,3 +969,11 @@ html[data-theme="pub"] .gamebar .invbar, html[data-theme="britpop"] .gamebar .in
 
 /* opponents: people bold, house robots light (15 Nov 2026) */
 .tablerow .who .names .bot { font-weight: 500; opacity: .75; }
+
+/* opponents' faces where the chalkboard was (15 Nov 2026) */
+.tablerow .faces { flex: none; width: 92px; height: 92px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center; gap: 2px; }
+.tablerow .faces .avatar { margin: 0; border: 0; }
+.tablerow .faces .hw { margin-top: 14px; }
+.tablerow .faces.n2 > :last-child { margin-top: 30px; margin-left: -8px; }
+.tablerow .faces.n2 > :first-child { margin-bottom: 26px; }
+.tablerow .faces.n3 { gap: 0 4px; }

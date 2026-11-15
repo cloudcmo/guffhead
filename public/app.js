@@ -557,8 +557,9 @@ const NUDGE_MS = 2 * 3600000;
 function tableRow(g) {
   // humans first, robots after and in a lighter weight: you scan for which person you're playing (Carl, 15 Nov 2026)
   const opps = [...g.opps.filter((p) => !isHouse(p)), ...g.opps.filter(isHouse)];
-  const heads = opps.map((p) => headOf(p, 26, g.wearer === p)).join("");
-  const thumb = `<span class="thumb">${boardSvg({ id: g.id, names: g.players.map((p) => (p === S.me.id ? S.me.name : g.names[p])), loser: g.status === "playing" ? null : g.names[g.loser] || null, size: 92 })}</span>`;
+  // faces of who you're playing in place of the chalkboard (Carl, 15 Nov 2026); people first, the 💩 on whoever wears it
+  const fs = opps.length === 1 ? 62 : opps.length === 2 ? 46 : 38;
+  const thumb = `<span class="faces n${Math.min(opps.length, 4)}">${opps.slice(0, 4).map((p) => headOf(p, fs, g.wearer === p)).join("")}</span>`;
   const looking = (g.looking || []).filter((p) => !isHouse(p));
   const humansWaiting = g.required.filter((p) => p !== S.me.id && !isHouse(p));
   const canNudge = g.status === "playing" && !g.myGo && humansWaiting.length && Date.now() - g.waitingSince >= NUDGE_MS && !(g.nudgedAt && Date.now() - g.nudgedAt < NUDGE_MS);
@@ -576,7 +577,7 @@ function tableRow(g) {
   const place = mine > 0 ? 1 + liveLeft.filter(([p, n]) => p !== S.me.id && n < mine).length : 0;
   const worst = mine > 0 && liveLeft.length > 1 && liveLeft.every(([p, n]) => p === S.me.id || n < mine);
   const standing = g.status !== "playing" || g.phase !== "play" ? "" : mine === 0 ? `<small class="standing safe">You're out: safe</small>` : worst ? `<small class="standing danger"><i>💩</i> You're in danger</small>` : place === 1 ? `<small class="standing good">You're winning</small>` : "";
-  return `<a class="tablerow${g.myGo ? " go" : ""}" href="#/game/${g.id}">${thumb}<span class="who"><span class="heads">${heads}</span>${who}<small>${what}</small>${g.last && g.status === "playing" ? `<small class="lastline">${esc(g.last)}</small>` : ""}${extra}${standing}</span><span class="sc">${g.status === "playing" ? `${mine}<small>to go</small>` : g.loser === S.me.id ? "💩" : "😅"}</span></a>`;
+  return `<a class="tablerow${g.myGo ? " go" : ""}" href="#/game/${g.id}">${thumb}<span class="who">${who}<small>${what}</small>${g.last && g.status === "playing" ? `<small class="lastline">${esc(g.last)}</small>` : ""}${extra}${standing}</span><span class="sc">${g.status === "playing" ? `${mine}<small>${mine === 1 ? "card left" : "cards left"}</small>` : g.loser === S.me.id ? "💩" : "😅"}</span></a>`;
 }
 
 function ago(t) { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; }
