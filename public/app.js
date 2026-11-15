@@ -834,13 +834,14 @@ async function pollGame() {
   } catch {}
 }
 
-async function doAct(body) {
+async function doAct(body, theatre = null) {
   const G = S.G;
   if (S.busy) return;
   S.busy = true;
   try {
     const before = maxSeq();
     const r = await api(`/games/${G.id}/act`, { method: "POST", body: { ...body, seq: G.g.seq, since: before } });
+    if (theatre) { try { await theatre(r.game.g.events.filter((e) => e.seq > before)); } catch {} }
     S.sel = []; S.warn = null; S.warnOk = false;
     mergeEvents(r.game.g.events);
     if (body.act === "play" || body.act === "flip") { snap(body.cards ? body.cards.length : 1); buzz(12); }
@@ -1190,6 +1191,51 @@ function slideIn(fromEl, cards, pileLen) {
   ], { duration: 480 + (seed % 220), easing: "cubic-bezier(.15, .75, .3, 1)", fill: "forwards" });
   return anim.finished.then(() => f.remove(), () => f.remove());
 }
+/** Turning over a blind card is the most dramatic moment in the game (Carl, 15 Nov 2026: "too instant and too
+ *  unsatisfying... there should be some theatre"). A drumroll, the card grows to the middle of the screen and turns
+ *  over, you cheer or groan, the table laughs or calls you jammy, then it goes on the pile, or the pile comes to you. */
+const YAY = ["Woo hoo!", "Get in!", "Yes! Yes! YES!", "Never in doubt.", "Skill. Pure skill.", "Oh, you beauty!"];
+const NOO = ["Noooo.", "Oh, come ON.", "Of course it was.", "Why is it always me?", "Brilliant. Just brilliant.", "I'd like a recount."];
+async function flipTheatre(el, t0, evs) {
+  const e = evs.find((x) => x.k === "flip" && x.p === S.me.id);
+  if (!e || reduced() || !S.G) return;
+  const left = 1300 - (Date.now() - t0);
+  if (left > 0) await sleep(left);
+  const r = el.getBoundingClientRect();
+  const o = document.createElement("div");
+  o.className = "reveal";
+  o.innerHTML = `<span class="rv-in"><span class="rv-back">${back({ size: "lg" })}</span><span class="rv-face">${card(e.card, { size: "lg", s: S.G.settings })}</span></span>`;
+  document.body.appendChild(o);
+  el.style.visibility = "hidden";
+  const cx = innerWidth / 2, cy = innerHeight * 0.42;
+  const at = (x, y, sc, rot = 0) => `translate(${x}px, ${y}px) translate(-50%, -50%) scale(${sc}) rotate(${rot}deg)`;
+  await o.animate([{ transform: at(r.left + r.width / 2, r.top + r.height / 2, 0.6) }, { transform: at(cx, cy, 1.6) }], { duration: 500, easing: "cubic-bezier(.2, .8, .3, 1)", fill: "forwards" }).finished;
+  await sleep(250);
+  o.classList.add("flipped"); snap();
+  await sleep(600);
+  o.classList.add(e.ok ? "good" : "bad");
+  const others = S.G.g.seats.map((p) => p.id).filter((p) => p !== S.me.id);
+  if (e.ok) {
+    bubble(seatEl(S.me.id), anyOf(YAY), "good", 2200); buzz([20, 30, 20]);
+    setTimeout(() => bubble(seatEl(anyOf(others)), anyOf(["Jammy.", "Typical.", "Lucky so-and-so.", "Oh, give over.", "Flukey."]), "", 2000), 600);
+  } else {
+    bubble(seatEl(S.me.id), anyOf(NOO), "bad", 2400); buzz([60, 40, 60]);
+    others.forEach((p, i) => setTimeout(() => bubble(seatEl(p), anyOf(["Hahaha!", "lol", "Unlucky! (Not really.)", "Oh dear, oh dear.", "Pick 'em up!", `A ${cardName(e.card)}. Bless.`, "😂"]), "", 2000), 500 + i * 380));
+  }
+  await sleep(1500);
+  const pf = document.querySelector("#pile .fan") || $("pile");
+  const b = pf ? pf.getBoundingClientRect() : { left: cx, top: cy, width: 0, height: 0 };
+  await o.animate([{ transform: at(cx, cy, 1.6) }, { transform: at(b.left + b.width / 2, b.top + b.height / 2, 0.9, (seedOf(e.card) % 21) - 10) }], { duration: 420, easing: "cubic-bezier(.5, 0, .7, .4)", fill: "forwards" }).finished;
+  o.remove();
+  if (!e.ok) {
+    await sleep(250);
+    const went = [...S.G.g.pile, e.card];
+    const sweep = slideAway(document.querySelector(".mine .hand") || document.querySelector(".mine"), went);
+    const fan = document.querySelector("#pile .fan"); if (fan) fan.style.visibility = "hidden";
+    await sweep;
+  }
+}
+
 /** A pick-up: the pile sweeps off the table to whoever's taking it, the cards spreading as they go (Carl, 15 Nov
  *  2026: "slide from the centre of the table to where the player is... more realistic and obvious"). */
 function slideAway(toEl, cards) {
@@ -1740,7 +1786,13 @@ function wireGame() {
     el.onclick = go;
     el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
   });
-  app.querySelectorAll("[data-down]").forEach((el) => { el.onclick = () => { if (G.myGo && G.options && G.options.zone === "down") { el.classList.add("flipping"); doAct({ act: "flip", index: Number(el.dataset.down) }); } }; });
+  app.querySelectorAll("[data-down]").forEach((el) => { el.onclick = () => {
+    if (!G.myGo || !G.options || G.options.zone !== "down" || S.busy) return;
+    el.classList.add("flipping");
+    const t0 = Date.now();
+    if (!reduced()) bubble(seatEl(S.me.id), anyOf(["🥁 Here goes…", "🥁 Come on…", "🤞 Please be good…", "🥁 Moment of truth…"]), "", 1100);
+    doAct({ act: "flip", index: Number(el.dataset.down) }, (evs) => flipTheatre(el, t0, evs));
+  }; });
   if ($("playBtn")) $("playBtn").onclick = () => playSelected();
   wireDrag();
   app.querySelectorAll("[data-tab4]").forEach((b) => (b.onclick = () => { S.tab = b.dataset.tab4; if (S.tab === "chat") markRead(); renderGame(); }));

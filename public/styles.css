@@ -1089,3 +1089,14 @@ html .game.fit .table .pile > small { display: none; }
 @keyframes buzzround { from { transform: rotate(0deg) translateX(46px) rotate(0deg); } to { transform: rotate(360deg) translateX(46px) rotate(-360deg); } }
 @media (prefers-reduced-motion: reduce) { .fan .heap, .fan .stink i, .fan .flies i { animation: none; } .fan .stink i { opacity: .7; } }
 .fan .heap { top: -20px; } .fan .stink { top: -44px; }
+
+/* the blind-card reveal (15 Nov 2026) */
+.reveal { position: fixed; left: 0; top: 0; z-index: 80; pointer-events: none; perspective: 700px; }
+.reveal .rv-in { position: relative; display: block; transform-style: preserve-3d; transition: transform .5s cubic-bezier(.3, 1.4, .5, 1); }
+.reveal.flipped .rv-in { transform: rotateY(180deg); }
+.reveal .rv-back, .reveal .rv-face { display: block; backface-visibility: hidden; -webkit-backface-visibility: hidden; line-height: 0; }
+.reveal .rv-face { position: absolute; inset: 0; transform: rotateY(180deg); }
+.reveal .card { box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+.reveal.good .rv-face .card { box-shadow: 0 0 0 4px #2FBF71, 0 0 30px rgba(47, 191, 113, .8); }
+.reveal.bad .rv-face .card { box-shadow: 0 0 0 4px #E0362C, 0 0 30px rgba(224, 54, 44, .7); animation: nope .4s ease-in-out 2; }
+@keyframes nope { 25% { translate: -6px 0; } 75% { translate: 6px 0; } }
