@@ -288,7 +288,7 @@ async function renderLogin() {
         <label>Your first name <input id="wname" maxlength="20" autocomplete="given-name" autocapitalize="words" placeholder="First name" required></label>
         <div id="ts"></div>
         <button class="btn gold big" type="submit" id="walkinBtn">Deal me in ▸</button>
-        <p class="small soft">No email, no password. You'll play GuffBot and Ms GuffBot first, and you can invite a friend from your tables.</p>
+        <p class="small soft">No email, no password. You'll play GuffBot and Ms GuffBot first, and you can invite a friend from your games.</p>
         <p class="err" id="walkinErr" hidden></p>
       </form>
       <details class="card-panel regulars"${store.get("gh:was-regular") ? " open" : ""}><summary>Got a Guff login?</summary>
@@ -349,9 +349,9 @@ async function renderLobby() {
         <p class="patter">"${esc(S.hello || (S.hello = helloLine(S.me.name, S.me.guest && !r.games.length)))}"</p>
       </div>
       ${S.me.walkin ? `<p class="card-panel guestnote">Welcome, ${esc(S.me.name)}. Deal a game against GuffBot and Ms GuffBot below, or invite a friend: if they like S***head, they'll like this. This phone remembers you.</p>` : S.me.guest ? `<p class="card-panel guestnote">You're ${esc(S.me.hostName || "a friend")}'s guest. Deal them another game below, or invite someone of your own. This phone remembers you.</p>` : ""}
-      ${newsLine(r.news)}
+      ${/* the "7 burns this month" news line is gone (Carl, 15 Nov 2026: too busy, and it didn't mean much) */ ""}
       ${S.me.guest ? "" : leagueSnippet(r.league)}
-      <h2>Your tables</h2>
+      <h2>Your games</h2>
       <div class="tables">${playing.length ? playing.map(tableRow).join("") : `<p class="soft">No games on. Deal one below.</p>`}</div>
       ${done.length && Date.now() - (done[0].finished || done[0].updated) < 2 * 86400000 ? `<a class="card-panel hlpromo" href="#/highlights/${done[0].id}"><span class="hllogo"><b>GUFF</b><span>OF THE DAY</span></span><span>📺 ${esc(done[0].loser === S.me.id ? "Relive how you became the Guffhead" : `Watch ${done[0].names[done[0].loser] || "someone"} become the Guffhead`)} ▸</span></a>` : ""}
       ${done.length ? `<details class="done"><summary>Lately finished</summary>${done.map(tableRow).join("")}</details>` : ""}
@@ -663,7 +663,7 @@ async function renderJoin(code) {
   let action;
   if (inv.status === "expired") action = `<p class="patter">This invite has run out (they last a week). Ask ${esc(inv.hostName)} for a new one.</p>`;
   else if (inv.status === "used" && !mine) action = `<p class="patter">This invite's been used. Ask ${esc(inv.hostName)} for a new one.</p>`;
-  else if (isHost && inv.status === "open") action = `<p class="patter">This is your own invite link. Send it to someone: whoever opens it first gets the seat.</p><p class="foot"><a href="#/">Back to your tables</a></p>`;
+  else if (isHost && inv.status === "open") action = `<p class="patter">This is your own invite link. Send it to someone: whoever opens it first gets the seat.</p><p class="foot"><a href="#/">Back to your games</a></p>`;
   else if (mine) action = `<button class="btn gold big" id="joinMe">${inv.status === "used" ? "To the game ▸" : `Pull up a stool as ${esc(S.me.name)}`}</button>`;
   else action = `<form id="joinForm" class="card-panel form"><label>What's your name? <input id="gname" maxlength="20" autocomplete="given-name" autocapitalize="words" required placeholder="First name"></label><div id="ts"></div><button class="btn gold" type="submit">Pull up a stool</button><p class="err" id="joinErr" hidden></p></form>`;
   $("app").innerHTML = `
@@ -1330,7 +1330,7 @@ function finalCard(G) {
       <div class="row2"><a class="btn ghost" href="#/replay/${G.id}">📼 Watch the replay</a>${G.watching ? "" : `<button class="btn ghost" id="shareGame">📣 Share</button>`}</div>
     </div>
     <p class="small soft">${human.length > 1 ? (G.reigning && G.reigning !== G.loser ? `The 💩 passes from ${esc(names[G.reigning])} to ${esc(names[G.loser])}.` : G.reigning === G.loser ? `${esc(names[G.loser])} keeps the 💩. Again.` : `${esc(names[G.loser])} wears the 💩 until someone else loses.`) : "Practice against the house: it's in your record, not the league."}</p>
-    ${S.me.guest ? `<p class="guestnote">Enjoyed that? Deal again, or invite a friend from your tables: anyone who likes S***head will like this.</p>` : ""}
+    ${S.me.guest ? `<p class="guestnote">Enjoyed that? Deal again, or invite a friend from your games: anyone who likes S***head will like this.</p>` : ""}
     ${crackerHtml(G)}
   </div>`;
 }
@@ -2090,7 +2090,7 @@ async function renderAdmin() {
   const app = $("app");
   app.innerHTML = `<p class="loading">Pam is fetching the books…</p>`;
   let d;
-  try { d = await api("/admin/overview"); } catch (e) { app.innerHTML = `<section class="admin"><p class="err">${esc(e.message)}</p><p><a href="#/">Back to the tables</a></p></section>`; return; }
+  try { d = await api("/admin/overview"); } catch (e) { app.innerHTML = `<section class="admin"><p class="err">${esc(e.message)}</p><p><a href="#/">Back to your games</a></p></section>`; return; }
   const A = S.admin = S.admin || { tab: "soon", q: "" };
   const day = 86400000, now = d.now;
   const when = (t) => { if (!t) return "never"; const n = Math.round((now - t) / day); return n <= 0 ? "today" : n === 1 ? "yesterday" : `${n} days ago`; };
@@ -2128,7 +2128,7 @@ async function renderAdmin() {
     ${A.tab === "soon" ? "" : `<input class="asearch" id="aq" placeholder="Search by name" value="${esc(A.q)}">`}
     <div class="alist">${body}</div>
     <p class="small soft">Each night at 3am the clear-out lets go of guests not seen for 30 days (unless kept or in a live game), guest-only games 14 days after the last move, and finished guest-only games after 90 days. Your regulars and their games are never touched.</p>
-    <p class="foot"><a href="#/">Back to the tables</a></p>
+    <p class="foot"><a href="#/">Back to your games</a></p>
   </section>`;
   app.querySelectorAll("[data-atab]").forEach((b) => (b.onclick = () => { A.tab = b.dataset.atab; renderAdmin(); }));
   const q = $("aq"); if (q) q.oninput = () => { A.q = q.value; clearTimeout(A.t); A.t = setTimeout(() => { renderAdmin().then(() => { const x = $("aq"); if (x) { x.focus(); x.setSelectionRange(x.value.length, x.value.length); } }); }, 250); };
@@ -2155,7 +2155,7 @@ function dealWith(id, name) {
   let bots = [];
   const draw = () => {
     box.innerHTML = `<div class="howcard invcard" role="dialog" aria-label="Deal a game"><h3>🃏 Deal ${esc(name)} in</h3>
-      <p>A new game starts now with ${esc(name)} in it. It's in their tables straight away, with a ping if they've switched those on.</p>
+      <p>A new game starts now with ${esc(name)} in it. It's in their games straight away, with a ping if they've switched those on.</p>
       <div class="chips"><button class="chip${bots.length ? "" : " on"}" data-who="two">Just the two of us</button><button class="chip${bots.length ? " on" : ""}" data-who="bots">Bring GuffBot and Ms GuffBot</button></div>
       <div class="howbtns"><button class="linkish" data-x>Cancel</button><button class="btn gold" id="dealGo">Deal ▸</button></div></div>`;
     box.querySelector("[data-x]").onclick = () => box.remove();
@@ -2215,12 +2215,11 @@ async function renderLogbook() {
 /* ---------- the league: only losing scores, and the score is 💩 ---------- */
 const poos = (n) => (n ? (n <= 12 ? "💩".repeat(n) : `💩 × ${n}`) : `<span class="soft">clean</span>`);
 function leagueSnippet(lg) {
+  // one slim line (Carl, 15 Nov 2026: the big card took a lot of room at the top). There's only ever one wearer:
+  // whoever lost the latest game with friends; the full table is a tap away.
   if (!lg || !lg.table || !lg.table.length) return "";
-  const top = lg.table.slice(0, 4);
-  return `<a class="leaguesnip card-panel" href="#/league">
-    ${lg.current ? `<span class="wearing">${headOf(lg.current, 46, true)}<span><b>${esc(lg.current === S.me.id ? "You're" : `${nameOf(lg.current)} is`)} wearing the 💩</b><small>Lost the last game with friends</small></span></span>` : ""}
-    <span class="mini">${top.map((x) => `<span>${esc(x.id === S.me.id ? "You" : x.name)} <b>${x.poos}</b></span>`).join("")}<em>Full league ▸</em></span>
-  </a>`;
+  const who = lg.current ? (lg.current === S.me.id ? "You're" : `${esc(nameOf(lg.current))} is`) : null;
+  return `<a class="leaguesnip slim" href="#/league">${lg.current ? `${headOf(lg.current, 30, true)}<span class="lsw"><b>${who} wearing the 💩</b></span>` : `<span class="lsw"><b>Nobody's wearing the 💩 yet</b></span>`}<em>League ▸</em></a>`;
 }
 async function renderLeague() {
   $("app").innerHTML = `<p class="loading">Pam is counting the 💩…</p>`;

@@ -957,3 +957,12 @@ html[data-theme="pub"] .gamebar .invbar, html[data-theme="britpop"] .gamebar .in
 .mine > .myhead { grid-column: 1; grid-row: 1; position: static; width: auto; max-width: 112px; }
 .mine > .mytable { grid-column: 2; grid-row: 1; margin: 0 0 4px; }
 .mine > .myhead .danger.me { white-space: normal; }
+
+/* the 💩 wearer as one slim line on the lobby (15 Nov 2026) */
+.leaguesnip.slim { display: flex; align-items: center; gap: 10px; padding: 6px 12px; min-height: 0; border-radius: 999px; text-decoration: none; color: var(--cream); background: rgb(var(--panel-rgb) / .82); border: 1px solid rgb(var(--accent-rgb) / .2); margin: 4px 0 6px; }
+.leaguesnip.slim .avatar { flex: none; border-radius: 50%; }
+.leaguesnip.slim .lsw { flex: 1; min-width: 0; }
+.leaguesnip.slim b { font-size: .95rem; }
+.leaguesnip.slim em { font-style: normal; font-weight: 800; color: var(--gold); white-space: nowrap; font-size: .9rem; }
+.lobby a.leaguesnip.slim { flex-direction: row; text-align: left; justify-content: flex-start; padding: 6px 14px 6px 8px; border-radius: 999px; }
+.lobby a.leaguesnip.slim > * { margin: 0; }
