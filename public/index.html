@@ -21,7 +21,7 @@
     try { t = localStorage.getItem("gh-theme") || t; } catch (e) {}
     if (["pub", "britpop", "clean"].indexOf(t) < 0) t = "clean";
     document.documentElement.dataset.theme = t;
-    var c = { pub: "#1C3A2C", britpop: "#0E1633", clean: "#F2F4F8" }[t];
+    var c = { pub: "#1C3A2C", britpop: "#0E1633", clean: "#FBE6C8" }[t];
     document.querySelector('meta[name="theme-color"]').content = c;
     if (t === "clean") document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').content = "default";
   })();

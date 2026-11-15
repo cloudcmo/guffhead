@@ -440,7 +440,7 @@ function setTheme(t) {
   try { localStorage.setItem("gh-theme", t); } catch {}
   document.documentElement.dataset.theme = t;
   const m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.content = { pub: "#1C3A2C", britpop: "#0E1633", clean: "#F2F4F8" }[t];
+  if (m) m.content = { pub: "#1C3A2C", britpop: "#0E1633", clean: "#FBE6C8" }[t];
   paper(S.paperSeed ?? BAR_SEED);
 }
 function wireLooks() {

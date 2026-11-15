@@ -114,11 +114,13 @@ function dots(bg, dot, size = 22) {
   return `${enc(svg)} 0 0 / ${size}px ${size}px, ${bg}`;
 }
 const glow = (bg, a, b) => `radial-gradient(60% 50% at 15% 10%, ${a}, transparent 70%) fixed, radial-gradient(55% 45% at 90% 85%, ${b}, transparent 70%) fixed, ${bg}`;
+// Carl, 15 Nov 2026: the clean look was "a bit white on white", so its backgrounds are now pale amber and apricot,
+// warm enough that the white panels stand out, calm enough not to distract.
 const CLEAN = [
-  { id: "mist", name: "Morning mist", css: () => glow("#F2F4F8", "#DCE3FF", "#FFE3EC") },
-  { id: "sage", name: "Sage light", css: () => glow("#F3F5F1", "#DDEBDC", "#E8E6FF") },
-  { id: "dotgrid", name: "Dot grid", css: () => dots("#F4F5F8", "#C9CED9") },
-  { id: "peach", name: "Peach haze", css: () => glow("#F7F4F1", "#FFE1CC", "#DDE9FF") },
+  { id: "amber", name: "Amber glow", css: () => glow("#FBE6C8", "#FFD49E", "#FFE8D2") },
+  { id: "apricot", name: "Apricot", css: () => glow("#FCE3CF", "#FFCBA3", "#FFE6C4") },
+  { id: "honeydots", name: "Honey dots", css: () => dots("#FBE7CB", "#E6C08C") },
+  { id: "marmalade", name: "Marmalade haze", css: () => glow("#FBE1C6", "#FFC48A", "#FFE9D3") },
 ];
 
 const SETS = { pub: PAPERS, britpop: NINETIES, clean: CLEAN };

@@ -37,7 +37,7 @@ html[data-theme="britpop"] .turnbar.yours { background: linear-gradient(180deg, 
 
 /* ====================== 2030: clean ====================== */
 html[data-theme="clean"] {
-  --night: #F2F4F8;
+  --night: #FBE6C8;   /* pale amber (15 Nov 2026), behind the wallpaper and the phone's status bar */
   --wood: #FFFFFF; --wood2: #FFFFFF; --wood3: #E3E7EE;
   --green: #4F46E5; --green2: #6366F1;
   --gold: #4F46E5; --gold-hi: #3730A3; --gold-lo: #312E81;
