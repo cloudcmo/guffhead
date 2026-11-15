@@ -6,12 +6,68 @@ const pick = (arr, seed) => arr[Math.abs(seed) % arr.length];
 const fill = (s, o) => s.replace(/\{(\w+)\}/g, (_, k) => (o[k] ?? ""));
 
 export const LINES = {
+  // the lobby greeting (Carl, 15 Nov 2026: "need more variety, gets tiresome fast"): a fresh one on every visit,
+  // never one of your last ten, and fitted to the time of day. See helloLine() below.
   hello: [
-    "Evening, {name}. Back room's free. Mind the carpet, it bites.",
     "{name}! Pull up a stool. The cards are only slightly sticky.",
     "Ah, {name}. Pam's put the good beer mats out for you.",
-    "Evening, {name}. Someone's going home as the Guffhead tonight. Let's hope it's not you.",
     "{name}, welcome back. The dartboard's been moved, after last time.",
+    "Here's {name}. Somebody hide the 💩.",
+    "{name}! Biscuit's been keeping your seat warm. Mind the hairs.",
+    "Look who it is. {name}, the cards have missed you. Some of them.",
+    "{name}. Shuffled, dealt, and ready to ruin someone's day.",
+    "Back again, {name}? The 💩 doesn't wear itself.",
+    "{name}! The jukebox is stuck on the same song again. Carry on.",
+    "Ah, {name}. Your usual stool, slightly wobblier than you left it.",
+    "{name}, the fruit machine says hello. It says that to everyone.",
+    "Welcome back, {name}. Nobody's touched your crisps. Much.",
+    "{name}! Pam says no card counting. Pam can't count either.",
+    "In you come, {name}. Wipe your feet, the carpet's been through enough.",
+    "{name}. The back room smells faintly of victory. And dog.",
+    "Ah, {name}. We were just talking about you. Nothing bad. Mostly.",
+    "{name}! Grab a seat. Not that one, it's Biscuit's.",
+    "Here comes trouble. Evening, {name}. Or whatever time it is.",
+    "{name}, your tables await. One of them is definitely winnable.",
+    "Ah, {name}. GuffBot's polished his cap for the occasion.",
+    "{name}! Ms GuffBot's been practising her poker face. It's the same face.",
+    "Welcome, {name}. Leave your dignity at the door, you'll get it back later.",
+    "{name}. The cards are warm, the beer is warm, and the welcome is lukewarm.",
+    "{name}, pull up a chair. Rules are on the wall, under the darts.",
+    "Ah, {name}. The quiz machine's broken, so it's cards or nothing.",
+    "{name}! Someone left a 2 under the table. Finders keepers.",
+    "There you are, {name}. Pam was about to send out a search party. Biscuit.",
+  ],
+  helloMorning: [
+    "Morning, {name}. Bit early for the back room, but we won't tell.",
+    "Morning, {name}. Pam's still mopping, so lift your feet.",
+    "{name}! Cards before coffee? Bold.",
+    "Morning, {name}. The beer mats are fresh, the jokes are not.",
+    "Up with the lark, {name}? The lark's already lost two games.",
+    "Morning, {name}. GuffBot's on his first oil change of the day.",
+    "Early doors, {name}. The cards are still yawning.",
+  ],
+  helloAfternoon: [
+    "Afternoon, {name}. A quick hand before tea?",
+    "Afternoon, {name}. The lunchtime crowd left you some crumbs.",
+    "{name}! Long lunch, is it? We won't say a word.",
+    "Afternoon, {name}. The sun's out somewhere. Not in here, mind.",
+    "Afternoon, {name}. Pam's doing the crossword. Don't ask her for help.",
+    "{name}. Perfect time for a game. Or an afternoon nap. Game first.",
+  ],
+  helloEvening: [
+    "Evening, {name}. Back room's free. Mind the carpet, it bites.",
+    "Evening, {name}. Someone's going home as the Guffhead tonight. Let's hope it's not you.",
+    "Evening, {name}. The regulars are in and the cards are out.",
+    "{name}! Prime time. The back room's buzzing. Well, the fridge is.",
+    "Evening, {name}. Pam's lit the candle in the bottle. Fancy.",
+    "Evening, {name}. Get a round in, then get a round of cards in.",
+  ],
+  helloLate: [
+    "Still up, {name}? The cards never sleep. Biscuit does.",
+    "Late one, {name}? Pam's put the stools on the tables but you're fine.",
+    "{name}! Last orders were hours ago. Cards are always open.",
+    "Burning the midnight oil, {name}? GuffBot's on standby mode.",
+    "Night owl, {name}? Keep it down, Biscuit's asleep on the deck.",
   ],
   yourGo: [
     "Your go, {name}.", "Over to you, {name}.", "You're up, {name}. No pressure. Some pressure.",
@@ -139,6 +195,21 @@ export function room(e) {
 }
 
 export function say(key, seed, o = {}) { return fill(pick(LINES[key], seed), o); }
+
+/** The lobby greeting: the time of day's lines plus the general ones, a fresh pick on every visit, never one of your
+ *  last ten (remembered on this phone). first = a brand-new walk-in, who gets the plain welcome. */
+export function helloLine(name, first = false) {
+  if (first) return fill(LINES.hello[0], { name });
+  const h = new Date().getHours();
+  const slot = h >= 5 && h < 12 ? "helloMorning" : h >= 12 && h < 17 ? "helloAfternoon" : h >= 17 && h < 23 ? "helloEvening" : "helloLate";
+  const pool = [...LINES[slot].map((t) => [slot, t]), ...LINES.hello.map((t) => ["hello", t])];
+  let recent = [];
+  try { recent = JSON.parse(localStorage.getItem("gh:hello-recent") || "[]"); } catch {}
+  const fresh = pool.filter(([, t]) => !recent.includes(t));
+  const choice = (fresh.length ? fresh : pool)[Math.floor(Math.random() * (fresh.length || pool.length))][1];
+  try { localStorage.setItem("gh:hello-recent", JSON.stringify([choice, ...recent].slice(0, 10))); } catch {}
+  return fill(choice, { name });
+}
 
 const NAMES = { 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9", T: "10", J: "jack", Q: "queen", K: "king", A: "ace" };
 const PLURAL = { 2: "2s", 3: "3s", 4: "4s", 5: "5s", 6: "6s", 7: "7s", 8: "8s", 9: "9s", T: "10s", J: "jacks", Q: "queens", K: "kings", A: "aces" };

@@ -1,6 +1,6 @@
 // Guffhead: the page. The back room of a 1970s pub. Routes: #/  #/game/:id  #/replay/:id  #/league  #/logbook  #/record
 import { needWords, rankOf, isMagic, describeRules, DEFAULTS, IDLE_CHOICES, MAX_PLAYERS, sortCards } from "./rules.js";
-import { comment, describe, weight, room, say, cardName, pluralOf, aCard } from "./lines.js";
+import { comment, describe, weight, room, say, cardName, pluralOf, aCard, helloLine } from "./lines.js";
 import { pick as pickPaper } from "./wallpaper.js";
 import { svg as boardSvg, png as boardPng } from "./poster.js";
 import { at as replayAt, steps as replaySteps, canReplay } from "./replay.js";
@@ -227,6 +227,8 @@ function route() {
   clearInterval(S.poll); S.poll = 0;
   document.body.classList.remove("fit"); S.sheet = false; S.autoMenu = false;
   const h = location.hash || "#/";
+  // a fresh greeting each time you come back to your tables (but not on every refresh while you're there)
+  if (h !== S.lastRoute) { if (h === "#/" || h === "") S.hello = null; S.lastRoute = h; }
   const gm = h.match(/^#\/(game|replay|highlights)\/([a-z0-9]{6})/);
   paper(gm ? seedOf(gm[2]) : BAR_SEED);
   nav(h);
@@ -344,7 +346,7 @@ async function renderLobby() {
     <section class="lobby">
       <div class="welcome">
         <div class="landlord">${headOf("guffbot", 74)}</div>
-        <p class="patter">"${esc(say("hello", S.me.guest && !r.games.length ? 0 : seedOf(tonight() + S.me.id), { name: S.me.name }))}"</p>
+        <p class="patter">"${esc(S.hello || (S.hello = helloLine(S.me.name, S.me.guest && !r.games.length)))}"</p>
       </div>
       ${S.me.walkin ? `<p class="card-panel guestnote">Welcome, ${esc(S.me.name)}. Deal a game against GuffBot and Ms GuffBot below, or invite a friend: if they like S***head, they'll like this. This phone remembers you.</p>` : S.me.guest ? `<p class="card-panel guestnote">You're ${esc(S.me.hostName || "a friend")}'s guest. Deal them another game below, or invite someone of your own. This phone remembers you.</p>` : ""}
       ${newsLine(r.news)}
