@@ -143,3 +143,10 @@ html[data-theme="clean"] .myhead .autobtn.on { color: #fff; }
 .lookcard > p.small { margin: 10px 0 0; text-align: center; }
 html[data-theme="clean"] .sheetcard { background: #fff; border-color: #E3E7EE; box-shadow: 0 -10px 40px rgba(16, 24, 40, .18); }
 html[data-theme="britpop"] .sheetcard { background: #13204A; }
+
+/* Your go: those tables go green so it's clear they're for actioning (Carl, 15 Nov 2026). Every look, after the
+   look's own panel colours so it always wins. */
+html .tablerow.go, html[data-theme] .tablerow.go { background: #DDF5E4; border-color: #1F9D5B; box-shadow: 0 0 0 1px #1F9D5B, 0 4px 14px rgba(31, 157, 91, .22); color: #10241A; }
+html[data-theme] .tablerow.go .who, html[data-theme] .tablerow.go .sc { color: #10241A; }
+html[data-theme] .tablerow.go .who small, html[data-theme] .tablerow.go .sc small { color: #2F5A40; }
+html[data-theme] .tablerow.go .who small b { color: #1F7A45; }
