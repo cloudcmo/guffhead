@@ -1286,8 +1286,9 @@ function turnBanner(G, turnId) {
   if (S.playing) return `<div class="turnbar catching"><span class="tb-main">Catching up…</span><small>Tap the table to skip ahead</small></div>`;
   if (!turnId) return "";
   if (G.myGo) {
-    const last = lastLine(G);
-    return `<div class="turnbar yours" role="status">${headOf(S.me.id, 32, wears(G, S.me.id))}<span class="tb-main">Your go</span><small class="tb-do">${esc(whatToDo(G))}</small>${last ? `<small class="tb-last">${last.html}</small>${last.throws}` : ""}</div>`;
+    // just "Your go" (Carl, 15 Nov 2026: "all you need to see at a glance is that it's your go"); what to play is on
+    // the pill on the table and the button below, and the full wording stays for screen readers
+    return `<div class="turnbar yours slim" role="status" aria-label="Your go. ${esc(whatToDo(G))}">${headOf(S.me.id, 26, wears(G, S.me.id))}<span class="tb-main">Your go</span></div>`;
   }
   // how many goes until mine
   let wait = "";

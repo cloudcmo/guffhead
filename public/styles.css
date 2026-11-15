@@ -1032,3 +1032,11 @@ html:not([data-theme="britpop"]) .game .table .need { background: #fff; }
 .minifan i { width: 13px; height: 19px; margin-left: -3px; transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * 9deg)); transform-origin: 50% 140%; }
 .minifan i { flex: none; margin-left: -4px; } .minifan i:first-child { margin-left: 0; }
 .minifan { width: auto; flex: none; margin-right: 2px; }
+
+/* "Your go" is one slim line (15 Nov 2026) */
+.game .turnbar.yours.slim { grid-template-columns: auto auto; justify-content: center; padding: 5px 14px; column-gap: 8px; }
+.game .turnbar.yours.slim > :first-child { grid-row: auto; margin: 0; align-self: center; }
+.game .turnbar.yours.slim .tb-main { font-size: 1.15rem; grid-column: auto; }
+/* the pile count hid under the "what goes" pill; the fan shows the pile anyway */
+.game.fit .pile > small { display: none; }
+html .game.fit .table .pile > small { display: none; }
