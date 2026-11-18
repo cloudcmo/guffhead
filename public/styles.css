@@ -1110,3 +1110,10 @@ html .game.fit .table .pile > small { display: none; }
 .game .stage.below .pose { display: none; }
 .game .stage.below .stagecard { grid-template-columns: auto auto 1fr; gap: 8px; }
 .game .stage.below .stagetext { font-size: .95rem; line-height: 1.25; }
+
+/* games list: "cards left" wraps instead of pushing the row off the screen (18 Nov 2026) */
+.tablerow { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.tablerow .sc { flex: none; width: 64px; text-align: center; }
+.tablerow .sc small { display: block; white-space: normal; width: auto; line-height: 1.05; letter-spacing: .02em; }
+.tablerow .faces { width: 92px; }
+html, body { overflow-x: clip; max-width: 100%; }

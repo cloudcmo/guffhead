@@ -577,7 +577,7 @@ function tableRow(g) {
   // humans first, robots after and in a lighter weight: you scan for which person you're playing (Carl, 15 Nov 2026)
   const opps = [...g.opps.filter((p) => !isHouse(p)), ...g.opps.filter(isHouse)];
   // faces of who you're playing in place of the chalkboard (Carl, 15 Nov 2026); people first, the 💩 on whoever wears it
-  const fs = opps.length === 1 ? 62 : opps.length === 2 ? 46 : 38;
+  const fs = opps.length === 1 ? 62 : opps.length === 2 ? 42 : 36;
   const thumb = `<span class="faces n${Math.min(opps.length, 4)}">${opps.slice(0, 4).map((p) => headOf(p, fs, g.wearer === p)).join("")}</span>`;
   const looking = (g.looking || []).filter((p) => !isHouse(p));
   const humansWaiting = g.required.filter((p) => p !== S.me.id && !isHouse(p));
